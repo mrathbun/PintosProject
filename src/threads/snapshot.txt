@@ -1,0 +1,25 @@
+This VGA/VBE Bios is released under the GNU LGPL
+
+Please visit :
+ . http://bochs.sourceforge.net
+ . http://www.nongnu.org/vgabios
+
+NO Bochs VBE Support available!
+
+Bochs BIOS - build: 01/25/06
+$Revision: 1.160 $ $Date: 2006/01/25 17:51:49 $
+Options: apmbios pcibios eltorito
+
+ata0 master: Generic 1234 ATA-2 Hard-Disk (0 MBytes)
+
+Booting from Hard Disk...
+PiLo hda1
+Loading........
+Kernel command line: run alarm-single
+thread_init reachedKernel PANIC at ../../threads/synch.c:47 in sema_init(): asse
+rtion `sema != NULL' failed.
+Call stack: 0xc002762e 0xc002228b 0xc002101a 0xc002040b.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+
