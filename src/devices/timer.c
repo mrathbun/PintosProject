@@ -91,10 +91,12 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 { 
+  if(ticks <= 0) {
+    return;
+  } 
   ASSERT (intr_get_level () == INTR_ON);
-  struct thread *cur = thread_current();
-  cur->remainingTicks = ticks;
-  sema_down(&(cur->sleepSem));
+  thread_current()->remainingTicks = ticks;
+  sema_down(&(thread_current()->sleepSem));
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
