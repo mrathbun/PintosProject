@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "threads/synch.h"
 
 /* States in a thread's life cycle. */
@@ -121,6 +122,8 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void thread_block (void);
 void thread_unblock (struct thread *);
 
+bool list_comp_greater(const struct list_elem *max, const struct list_elem *cur, void *aux);
+
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
@@ -133,6 +136,7 @@ typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
+int any_thread_get_priority (struct thread *t);  
 void thread_set_priority (int);
 
 int thread_get_nice (void);

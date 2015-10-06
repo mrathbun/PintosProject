@@ -54,6 +54,8 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+static int currentThreadAvailable;
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -63,6 +65,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
+
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
@@ -98,7 +101,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
+  currentThreadAvailable = 1;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -248,6 +251,13 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  /*
+  if(thread_current() != idle_thread && t->priority > thread_current()->priority) {
+    list_push_back(&ready_list, &thread_current()->elem);
+    thread_current()->status = THREAD_READY;
+    schedule();
+  }
+*/
   intr_set_level (old_level);
 }
 
@@ -352,6 +362,13 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+/*Must return max of donated priority and member priority*/
+int
+any_thread_get_priority (struct thread *t) 
+{
+  return t->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -488,6 +505,14 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+bool list_comp_greater(const struct list_elem *max, 
+                       const struct list_elem *cur, void *aux)
+{
+  struct thread *t = list_entry(cur, struct thread, elem);
+  struct thread *threadMax = list_entry(max, struct thread, elem);
+  return any_thread_get_priority(t) > any_thread_get_priority(threadMax);
+}
+
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -496,10 +521,13 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
-    return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  if(list_empty (&ready_list)) 
+    return idle_thread;  
+  else {
+    struct list_elem *next = list_max(&ready_list, list_comp_greater, 0); 
+    list_remove(next);
+    return list_entry (next, struct thread, elem);
+  } 
 }
 
 /* Completes a thread switch by activating the new thread's page

@@ -30,26 +30,89 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+   In struct thread:
+
+   -int64_t remainingTicks;
+     -This value is used to hold the amount of ticks that the thread is 
+      supposed to sleep for. When 0, the thread awakes.
+
+   -struct semaphore sleepSem;
+     -Used to block the thread while it is sleeping. When remainingTicks
+      gets to 0, sema_up is called and the thread awakes.  
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
+  
+   -First a check is completed to make sure that the desired sleep time is 
+    greater than 0. If it isn't, then the timer shouldn't sleep. If it is,
+    then two members in the thread are modified. The int64_t value 
+    remainingTicks is set equal to the value passed in. The thread's member
+    semaphore sleepSem is then subjected to a call of sema_down, which 
+    effectively blocks the thread. This thread is now reliant on the timer 
+    interrupt handler to wake up. For every timer interrupt after the thread
+    is blocked, its remainingTicks value is decremented. Once this value 
+    reaches 0, sema_up is called on the thread's sleepSem, effectively waking
+    the thread.         
+   
+
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+  -While thread_foreach is used to iterate through all of the threads in the 
+   system, each thread is checked for a status of blocked and a remainingTicks
+   value greater than 0. If either of these comparisons are false, then 
+   nothing more is done for that thread. Thus, significant time is only spent 
+   on threads that are sleeping, which is unavoidable.
+   
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+  -Each thread holds its own semaphore and remainingTicks values. Thus, there
+   aren't shared resources between threads that are relevant to the 
+   timer_sleep() method. Since there are no shared ressources, there is
+   no way for a race condition to occur. 
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+   -Once again, race conditions are avoided by design, rather than explicit 
+    synchronization constructs. A timer interrupt will only effect a thread 
+    that has been blocked by its sleepSem. Since the thread in timer_sleep()
+    is only blocked by sleepSem on the last line of the function, the rest of 
+    the function is unaffected by a timer interrupt.
+   
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+  
+   -Our design choice was made for a couple of reasons. First of all we 
+    believe our design does a good job of ensuring synchronization. By 
+    ensuring that each thread holds its resources that it relies on for 
+    sleeping, there is no overlap between threads. Thus, any possibility 
+    of a race condition is handled without the need for a static semaphore. 
+    If possible, it is a good idea to eliminate the need for static variables,
+    as it introduces a global state that could be problematic when building on
+    existing code. Furthermore, our implementation is simple, readable, and 
+    efficient. Another possible implementation thought of by our group was to 
+    place each sleeping thread in a statically declared list. This would allow 
+    us to avoid having to iterate through each thread, and only focus on the 
+    sleeping thread. While this solution is more efficient, many other 
+    problems arrive. The primary problem is the need for synchronization. 
+    Since the dedicated sleep list is a shared resource, any access of this 
+    list has to be treated as a critical section. This makes the code more 
+    difficult to implement, less clear to read, and less reusable. It also 
+    leaves open the possibility of the list being corrupted if synchronization 
+    isn't perfectly implemented.   
+ 
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -60,6 +123,7 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
@@ -68,6 +132,17 @@ Wenhua Lin <wenhuali@buffalo.edu>
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
+
+   -Releasing a semaphore, lock, or condition variable is handled all in the 
+    same way, as both a lock and condition variable use semaphores to 
+    implement blocking. As a result, giving access to the highest priority
+    threads can be implemented in the same way for each. The initial 
+    implementation in pintos woke up the first thread in the waiting queue.
+    Thus, it was a first come first served implementation. So, to implement 
+    priority scheduling, all that needs to be done is to return the highest
+    priority thread in the list rather than the first. This is implemented
+    using the <list.h> function list_max, which is passed a pointer to the
+    function list_comp_greater.  
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
