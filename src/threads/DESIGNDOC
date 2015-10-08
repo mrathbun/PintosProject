@@ -123,10 +123,42 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+   In struct thread: 
+
+   -struct list wait_list;
+      -Stores all of the threads waiting on a lock being held by this thread.
+       Allows for priority donation to occur. 
+
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+   -For the data structure, we will be using a list as defined in <list.h>. 
+    When a thread attempts to acquire a lock but can't, then it will add itself
+    to the list of the thread that is holding the lock. This will give the 
+    current thread a chance to reference each one of the priorities in its     
+    list when get_priority() is called. Nested donation will then be handled
+    through recursion, as get_priority() will be called on every member of the 
+    list. This will give eac waiting thread the chance to check for a higher
+    priority thread in its list. 
+
+    -ASCII Representation of nested priority donation:
+
+                     High
+                       |
+                       v
+           Medium -> Lock
+              |
+              v
+     Low -> Lock    
+
+     In this situation, a medium priority process is waiting on a lock held by 
+     a low priority process. Furthermore, a high priority process is waiting on
+     that same medium priority process. This results in the high priority
+     process donating its priority to to the medium priority process, making
+     it high priority. That process then further donates its high priority to 
+     the low level process, resulting in all processes having a high priority.   
 
 ---- ALGORITHMS ----
 
@@ -147,19 +179,49 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+   -There are two things that can happen when a call to lock_aquire() is made.
+    If the lock is not held by another thread, than the lock is acquired. If
+    it is, then the thread trying to acquire the lock must be added to the 
+    wait_list of the thread that does hold the lock. Every time get_priority()
+    is called, it must iterate through its wait_list and call get_priority()
+    on all of the threads in the list. This use of recursion allows for each
+    thread in the list to pass its donated priority, and not just its base 
+    priority. As a result, nested donation is handled through the wait_list
+    and recursion inside of get_priority().  
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
 
+   -When lock_release() is called, the lock that held the thread must remove 
+    all of the threads waiting on the lock from its wait_list. The highest
+    priority thread waiting for the lock will then acquire it. This thread
+    will then add all of the threads still waiting on the lock to its 
+    wait_list. This is done even though it is the highest priority thread at
+    the time, as nested donation could change that ordering.
+    
 ---- SYNCHRONIZATION ----
 
 >> B6: Describe a potential race in thread_set_priority() and explain
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+   - 
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+   -This design was chosen due to its elegance and flexibility. There were a 
+    couple of other options. One would be to update the thread holding the 
+    lock's priority using set_priority() whenever a donation was needed. While
+    this would be more efficient in most cases, it becomes tricky to properly 
+    account for all of the possibilities of nested donation. It is also 
+    possible to use a static list to account for all of the threads that 
+    are a candidate for donation. However, this again introduces the global 
+    state, making it difficult to achieve synchronization. Our design, in 
+    contrast, is simple and clean, all while effectively taking into account
+    nested donation.     
 
 			  ADVANCED SCHEDULER
 			  ==================
