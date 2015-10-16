@@ -213,8 +213,21 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  check_preempt(t);
+
   return tid;
 }
+
+/* Checks whether the current thread should be preempted. */
+void 
+check_preempt(struct thread *t)
+{
+  if(any_thread_get_priority(t) > any_thread_get_priority(thread_current()))
+  {
+     thread_yield();
+  }
+}
+
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
@@ -251,13 +264,7 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-  /*
-  if(thread_current() != idle_thread && t->priority > thread_current()->priority) {
-    list_push_back(&ready_list, &thread_current()->elem);
-    thread_current()->status = THREAD_READY;
-    schedule();
-  }
-*/
+  
   intr_set_level (old_level);
 }
 
@@ -355,20 +362,33 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  struct list_elem *waiting_Max = list_max(&ready_list, list_comp_greater, 0);
+  check_preempt(list_entry (waiting_Max, struct thread, elem));
+
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return any_thread_get_priority(thread_current());
 }
 
 /*Must return max of donated priority and member priority*/
 int
 any_thread_get_priority (struct thread *t) 
 {
-  return t->priority;
+  if(list_empty(&(t->wait_list))) 
+  {
+    return t->priority; 
+  } 
+  else {
+    int max = t->priority;
+    struct list_elem *max_in_list = list_max(&ready_list, list_comp_greater, 0);
+    struct thread *max_thread  = list_entry(max_in_list, struct thread, elem);
+    int list_max_priority = any_thread_get_priority(max_thread);
+    return max > list_max_priority ? max : list_max_priority; 
+  } 
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -440,7 +460,7 @@ idle (void *idle_started_ UNUSED)
     }
 }
 
-/* Function used as the basis for a kernel thread. */
+//Function used as the basis for a kernel thread. */
 static void
 kernel_thread (thread_func *function, void *aux) 
 {
@@ -489,6 +509,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->remainingTicks = 0;
   sema_init(&(t->sleepSem), 0);
+  list_init(&(t->wait_list));
   list_push_back (&all_list, &t->allelem);
 }
 

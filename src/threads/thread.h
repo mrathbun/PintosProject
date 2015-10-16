@@ -93,6 +93,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     int64_t remainingTicks;
     struct semaphore sleepSem;
+    struct list wait_list;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -118,6 +119,7 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+void check_preempt(struct thread *t); 
 
 void thread_block (void);
 void thread_unblock (struct thread *);

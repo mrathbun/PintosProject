@@ -6,6 +6,8 @@
 				   
 ---- GROUP ----
 
+Group name: OS Team #1 (?)
+
 >> Fill in the names and email addresses of your group members.
 
 Mitchell Rathbun <mrathbun@buffalo.edu>
@@ -140,7 +142,7 @@ Wenhua Lin <wenhuali@buffalo.edu>
     current thread a chance to reference each one of the priorities in its     
     list when get_priority() is called. Nested donation will then be handled
     through recursion, as get_priority() will be called on every member of the 
-    list. This will give eac waiting thread the chance to check for a higher
+    list. This will give each waiting thread the chance to check for a higher
     priority thread in its list. 
 
     -ASCII Representation of nested priority donation:
@@ -148,10 +150,10 @@ Wenhua Lin <wenhuali@buffalo.edu>
                      High
                        |
                        v
-           Medium -> Lock
+           Medium <- Lock
               |
               v
-     Low -> Lock    
+     Low <- Lock    
 
      In this situation, a medium priority process is waiting on a lock held by 
      a low priority process. Furthermore, a high priority process is waiting on
@@ -205,7 +207,15 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
-   - 
+   -If a thread decrements its priority below the highest priority thread that
+    is waiting for cpu, then it should prempt itself. However, it is possible 
+    that it decrements its priority, and then is interrupted by the round
+    robin scheduler. Since the running thread is no longer the highest priority
+    thread, it will yield, and the highest priority thread will be scheduled.
+    However, after it returns from the interrupt, the second yield will not 
+    have been called. This could be avoided through the use of a lock. Our 
+    implementation does all of its work in get_priority(), so this condition
+    will not ever be an issue.      
 
 ---- RATIONALE ----
 
@@ -232,6 +242,33 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+   -In thread.h:
+
+    -In struct thread:
+       -int nice;
+          -Keeps track of the nice value for the thread. Determines how willing
+           thread is to give or take away cpu time.
+
+       -float recent_cpu;
+          -Holds the recent_cpu calculation for the thread. Represents how 
+           much cpu time the thread has used recently. 
+
+
+   -In thread.c:
+  
+    -Static variables:
+       -static float load_avg;
+          -Holds the moving waited average of the number of threads waiting for
+           cpu time. This is used in the calculation of recent_cpu. 
+ 
+       -static int ready_threads;
+          -Holds the number of ready_threads. This is used in the calculation 
+           of load_avg.
+
+       -static struct list priority_queues[64];
+          -Implemented as an array of size 64 for which each index gives a 
+           queue of threads at that given priority. 
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -242,23 +279,41 @@ Wenhua Lin <wenhuali@buffalo.edu>
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0      0   0   0  63  61  59      A 
+ 4      4   0   0  62  61  59      A
+ 8      8   0   0  61  61  59      A          
+12     12   0   0  60  61  59      B             
+16     12   4   0  60  60  59      A           
+20     16   4   0  59  60  59      B             
+24     16   8   0  59  59  59      A               
+28     20   8   0  58  59  59      B            
+32     20  12   0  58  58  59      C            
+36     20  12   4  58  58  58      A              
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+   -Yes, there were a couple of ambiguities. First, it was not specified which
+    thread should be selected if two or more threads have the same priority.
+    We just decided to select the thread at the front of the list, which is in
+    this case was the thread whose name was lowest in the alphabet. The other 
+    uncertainty came concerning the time quantum used in round robin scheduling.
+    Since it is unlikely that the time quantum will be less than 4 ticks, it 
+    was not factored into our scheduling.   
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+   -If too much work is done inside the timer interrupt handler, then the ticks
+    system will cease to work. However, all of the data needed for the advanced
+    scheduler must be updated right after a tick occurs. To combat this 
+    problem, we put most of the calculations in the timer interrupt handler,
+    but sought to make the code as efficient as possible. Furthermore, we 
+    placed calculations for thread members outside of the disabled interrupt 
+    context.
+  
+
 
 ---- RATIONALE ----
 
@@ -267,12 +322,34 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+   -One of the main problems with our design is the amount of work that is done
+    in the timer interrupt handler. However, it is difficult to avoid this 
+    problem due to the requirements of the problem. If there was more time, a 
+    couple of steps could be taken. Since the advanced scheduler is reliant
+    on the timer, steps could be taken to reduce the time in the interrupt 
+    handler needed for the alarm clock. This could be done by having a static
+    list of sleeping threads, instead of simply iterating through all threads.
+    Doing this will free up timer in the timer interrupt for all of the threads
+    to calculate their priorities.
+   
+   
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+   -Since C already provided the data type float, we did not find it necessary
+    to implement an abstract data type. Instead, we believe the simplest 
+    approach is to simply provide stand alone functions for any operation
+    involving these float data types. Thus, any calculation involving load_avg
+    or recent_cpu can just use these functions in place of the standard C 
+    operators. This layer of abstraction is a much cleaner way to implement
+    fixed point operations than an implementation with no abstraction. The 
+    reason for this is that the code becomes more reusable and transparent to 
+    the reader.     
 
 			   SURVEY QUESTIONS
 			   ================
