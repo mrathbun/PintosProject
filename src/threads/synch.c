@@ -113,17 +113,21 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+  struct thread *t = NULL;
+
   if (!list_empty (&sema->waiters)) 
   {
     struct list_elem *next = list_max(&sema->waiters, list_comp_greater, 0);
     list_remove(next);
-    struct thread *t = list_entry (next, struct thread, elem);
+    t = list_entry (next, struct thread, elem);
     thread_unblock (t);
-    //printf("%d\n", intr_context());
-    //check_preempt(t);
-    
-  } 
+  }
+   
   sema->value++;
+  if(t != NULL && !intr_context()) 
+  {
+    check_preempt(t);
+  }
   intr_set_level (old_level);
 }
 
@@ -202,11 +206,11 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  //struct thread *current = thread_current();
-  //if(lock->holder != NULL) {
-    //list_push_back(&(lock->holder->wait_list), &current->elem);
-  //}
-
+  /* struct thread *current = thread_current();
+  if(ock->holder != NULL) {
+    list_push_back(&(lock->holder->wait_list), &current->elem);
+  }*/
+   
   sema_down (&lock->semaphore);
   lock->holder = thread_current();
 }
@@ -326,12 +330,15 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
-
-  if (!list_empty (&cond->waiters)) 
+  
+  if (!list_empty (&cond->waiters) && !intr_context()) 
   {
+    printf("0000000000000\n");
     struct list_elem *next = list_max(&cond->waiters, list_comp_greater, 0);
     list_remove(next);
+    printf("1111111111111\n");
     sema_up (&list_entry (next, struct semaphore_elem, elem)->semaphore);
+    printf("2222222222222\n");
   }
 }
 

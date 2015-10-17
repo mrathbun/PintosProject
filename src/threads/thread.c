@@ -91,7 +91,6 @@ void
 thread_init (void) 
 {
   ASSERT (intr_get_level () == INTR_OFF);
-
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -222,9 +221,9 @@ thread_create (const char *name, int priority,
 void 
 check_preempt(struct thread *t)
 {
-  if(any_thread_get_priority(t) > any_thread_get_priority(thread_current()))
+  if(any_thread_get_priority(t) > thread_get_priority())
   {
-     thread_yield();
+    thread_yield();
   }
 }
 
@@ -362,9 +361,11 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  struct list_elem *waiting_Max = list_max(&ready_list, list_comp_greater, 0);
-  check_preempt(list_entry (waiting_Max, struct thread, elem));
-
+  if(!list_empty(&ready_list)) 
+  {
+    struct list_elem *waiting_Max = list_max(&ready_list, list_comp_greater, 0);
+    check_preempt(list_entry (waiting_Max, struct thread, elem));
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -384,7 +385,7 @@ any_thread_get_priority (struct thread *t)
   } 
   else {
     int max = t->priority;
-    struct list_elem *max_in_list = list_max(&ready_list, list_comp_greater, 0);
+    struct list_elem *max_in_list = list_max(&(t->wait_list), list_comp_greater, 0);
     struct thread *max_thread  = list_entry(max_in_list, struct thread, elem);
     int list_max_priority = any_thread_get_priority(max_thread);
     return max > list_max_priority ? max : list_max_priority; 
@@ -437,7 +438,6 @@ idle (void *idle_started_ UNUSED)
   struct semaphore *idle_started = idle_started_;
   idle_thread = thread_current ();
   sema_up (idle_started);
-
   for (;;) 
     {
       /* Let someone else run. */
@@ -500,7 +500,7 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
-
+  
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
