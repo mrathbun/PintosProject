@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+static void check_donate_all (struct thread *t, void *aux UNUSED);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -206,14 +208,11 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  /* struct thread *current = thread_current();
-  if(ock->holder != NULL) {
-    list_push_back(&(lock->holder->wait_list), &current->elem);
-  }*/
    
   sema_down (&lock->semaphore);
   lock->holder = thread_current();
-}
+  list_push_back(&lock->holder->lock_list, &lock->elem);
+}  
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -246,6 +245,7 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  list_remove(&lock->elem); 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

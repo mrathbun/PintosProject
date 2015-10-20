@@ -8,6 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/fixed_point.c"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -27,6 +28,8 @@ static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
 static void update_sleep(struct thread *t, void *aux UNUSED);
+static void update_recent_cpu(struct thread *t, void *aux UNUSED);
+static void update_priority(struct thread *t, void *aux UNUSED);
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
@@ -174,10 +177,24 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  thread_tick (); //Also handles recent_cpu for current thread.
+
   enum intr_level old_level;
   old_level = intr_disable();
   thread_foreach(update_sleep, 0);
+  if(thread_mlfqs && timer_ticks() % TIMER_FREQ == 0) 
+  {
+    thread_set_load_avg();
+    thread_foreach(update_recent_cpu, 0);
+  } 
+
+  if(thread_mlfqs && timer_ticks() % 4 == 0)
+  { 
+   thread_foreach(update_priority, 0);
+   struct thread *waiting_Max = get_max_from_priority_queue();
+   check_preempt(waiting_Max);
+  }
+
   intr_set_level (old_level); 
 }
 
@@ -190,6 +207,22 @@ update_sleep (struct thread *t, void *aux UNUSED) {
     }        
   }
 } 
+
+static void
+update_recent_cpu (struct thread *t, void *aux UNUSED) {
+  t->recent_cpu = cRecent_Cpu_Fixed(t);
+}
+
+static void
+update_priority (struct thread *t, void *aux UNUSED) {
+  int new_priority = cPriority(t);
+  if(t->priority != new_priority || t == thread_current())
+  {
+    list_remove(&t->priorityelem);
+    t->priority = new_priority; 
+    list_push_back(thread_get_priority_queue(new_priority), &t->priorityelem);
+  }  
+}
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

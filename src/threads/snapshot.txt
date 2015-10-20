@@ -1,9 +1,3 @@
-This VGA/VBE Bios is released under the GNU LGPL
-
-Please visit :
- . http://bochs.sourceforge.net
- . http://www.nongnu.org/vgabios
-
 NO Bochs VBE Support available!
 
 Bochs BIOS - build: 01/25/06
@@ -15,10 +9,16 @@ ata0 master: Generic 1234 ATA-2 Hard-Disk (0 MBytes)
 Booting from Hard Disk...
 PiLo hda1
 Loading........
-Kernel command line: run alarm-single
-thread_init reachedKernel PANIC at ../../threads/synch.c:47 in sema_init(): asse
-rtion `sema != NULL' failed.
-Call stack: 0xc002762e 0xc002228b 0xc002101a 0xc002040b.
+Kernel command line: run prioirty-donate-one
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'prioirty-donate-one':
+Kernel PANIC at ../../tests/threads/tests.c:60 in run_test(): no test named "pri
+oirty-donate-one"
+Call stack: 0xc0027a22 0xc0029650 0xc0020735 0xc00206d5.
 The `backtrace' program can make call stacks useful.
 Read "Backtraces" in the "Debugging Tools" chapter
 of the Pintos documentation for more information.

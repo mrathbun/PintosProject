@@ -49,6 +49,7 @@ typedef int tid_t;
              |                                 |
              |                                 |
              +---------------------------------+
+
              |              magic              |
              |                :                |
              |                :                |
@@ -90,10 +91,13 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int nice;
+    int recent_cpu;
+    struct list_elem priorityelem;
     struct list_elem allelem;           /* List element for all threads list. */
     int64_t remainingTicks;
     struct semaphore sleepSem;
-    struct list wait_list;
+    struct list lock_list;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -120,6 +124,7 @@ void thread_print_stats (void);
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void check_preempt(struct thread *t); 
+int calc_priority(struct thread *t);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -145,5 +150,11 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+int thread_get_load_avg_fixed (void); 
+void thread_set_load_avg(void);
+int thread_get_ready_threads(void);
+struct thread* get_max_from_priority_queue(void);
+
+struct list* thread_get_priority_queue(int priority);
 
 #endif /* threads/thread.h */
