@@ -128,7 +128,7 @@ sema_up (struct semaphore *sema)
   sema->value++;
   if(t != NULL && !intr_context()) 
   {
-    check_preempt(t);
+    check_preempt(t, false);
   }
   intr_set_level (old_level);
 }

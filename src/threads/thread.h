@@ -93,7 +93,6 @@ struct thread
     int priority;                       /* Priority. */
     int nice;
     int recent_cpu;
-    struct list_elem priorityelem;
     struct list_elem allelem;           /* List element for all threads list. */
     int64_t remainingTicks;
     struct semaphore sleepSem;
@@ -123,8 +122,7 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
-void check_preempt(struct thread *t); 
-int calc_priority(struct thread *t);
+void check_preempt(struct thread *t, bool flag); 
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -153,8 +151,9 @@ int thread_get_load_avg (void);
 int thread_get_load_avg_fixed (void); 
 void thread_set_load_avg(void);
 int thread_get_ready_threads(void);
-struct thread* get_max_from_priority_queue(void);
 
-struct list* thread_get_priority_queue(int priority);
+struct list_elem* max_priority_elem(void);
+struct thread* find_next_pri_elem();
+
 
 #endif /* threads/thread.h */

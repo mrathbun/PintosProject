@@ -190,11 +190,23 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   if(thread_mlfqs && timer_ticks() % 4 == 0)
   { 
-   thread_foreach(update_priority, 0);
-   struct thread *waiting_Max = get_max_from_priority_queue();
-   check_preempt(waiting_Max);
+    thread_foreach(update_priority, 0);
+    struct list_elem *waiting_Max = max_priority_elem();
+    struct thread *max_Thread = list_entry(waiting_Max, struct thread, elem);
+    printf("%d%s\n", max_Thread->priority, max_Thread->name);
+    if(max_Thread->priority == thread_current()->priority)
+    {
+      struct thread *next_to_run = find_next_pri_elem(&thread_current()->elem);
+      //printf("%s\n", next_to_run->name);
+      check_preempt(next_to_run, true);  
+    }
+    else 
+    {  
+      //printf("%s\n", max_Thread->name);
+      check_preempt(max_Thread, false);
+    }
   }
-
+  
   intr_set_level (old_level); 
 }
 
@@ -215,13 +227,7 @@ update_recent_cpu (struct thread *t, void *aux UNUSED) {
 
 static void
 update_priority (struct thread *t, void *aux UNUSED) {
-  int new_priority = cPriority(t);
-  if(t->priority != new_priority || t == thread_current())
-  {
-    list_remove(&t->priorityelem);
-    t->priority = new_priority; 
-    list_push_back(thread_get_priority_queue(new_priority), &t->priorityelem);
-  }  
+  t->priority = cPriority(t);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
