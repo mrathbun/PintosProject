@@ -32,8 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-static void check_donate_all (struct thread *t, void *aux UNUSED);
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -333,12 +331,24 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   
   if (!list_empty (&cond->waiters) && !intr_context()) 
   {
-    printf("0000000000000\n");
-    struct list_elem *next = list_max(&cond->waiters, list_comp_greater, 0);
-    list_remove(next);
-    printf("1111111111111\n");
-    sema_up (&list_entry (next, struct semaphore_elem, elem)->semaphore);
-    printf("2222222222222\n");
+    struct list_elem *e;
+    struct semaphore_elem *max_semaphore_elem = list_entry(list_front (&cond->waiters), struct semaphore_elem, elem);
+    for (e = list_begin (&cond->waiters); e != list_end (&cond->waiters);
+           e = list_next (e))
+      {
+        struct semaphore_elem *s = list_entry (e, struct semaphore_elem, elem);
+        struct thread *max;
+        struct thread *cur; 
+        cur = list_entry(list_front(&s->semaphore.waiters), struct thread, elem); 
+        max = list_entry(list_front(&max_semaphore_elem->semaphore.waiters), struct thread, elem);
+        if(any_thread_get_priority(cur) > any_thread_get_priority(max))
+        {
+          max_semaphore_elem = s;   
+        }
+      }
+
+    list_remove(&max_semaphore_elem->elem);
+    sema_up (&max_semaphore_elem->semaphore);
   }
 }
 

@@ -3,7 +3,7 @@
 #include "threads/thread.h"
 
 #define f 16384
-#define LA59 16110
+#define LA59 16111
 #define LA1 273
 
 /*Implementations*/
@@ -48,7 +48,7 @@ static int nsubf(int a, int n) {
 }
 
 static int fmulf(int a, int b) {
-  return (((int64_t)a)*(b/f));
+  return (((int64_t)a)* b/f);
 }
 
 static int fmuln(int a, int n) {
@@ -56,7 +56,7 @@ static int fmuln(int a, int n) {
 }
 
 static int fdivf(int a, int b) {
-  return (((int64_t)a)*(f/b));
+  return (((int64_t)a)*f/b);
 }
 
 static int fdivn(int a, int n) {
@@ -98,12 +98,11 @@ static int cLoad_Avg_Final() {
   t2 = thread_get_load_avg_fixed(); 
   t2 = fmuln(t2,100);
   return ftonRN(t2);
-
 }
 
 static int cLoad_Avg_Fixed() {
   int t1,t2;
   t1 = fmulf(thread_get_load_avg_fixed(),LA59);
-  t2 = fmuln(LA1,thread_get_ready_threads);
+  t2 = fmuln(LA1,thread_get_ready_threads());
   return faddf(t1,t2);
 }

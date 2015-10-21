@@ -129,6 +129,8 @@ void thread_unblock (struct thread *);
 
 bool list_comp_greater(const struct list_elem *max, const struct list_elem *cur, void *aux);
 
+bool list_comp_greater_next(const struct list_elem *max, const struct list_elem *cur, void *aux);
+
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
@@ -152,8 +154,10 @@ int thread_get_load_avg_fixed (void);
 void thread_set_load_avg(void);
 int thread_get_ready_threads(void);
 
-struct list_elem* max_priority_elem(void);
-struct thread* find_next_pri_elem();
+void set_current_max(struct thread *max_Thread);
+void set_next_max(struct thread *max_Thread);
 
+struct list_elem* max_priority_elem(void);
+struct list_elem* next_max_priority_elem(void);
 
 #endif /* threads/thread.h */

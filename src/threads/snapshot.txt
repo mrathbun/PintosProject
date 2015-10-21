@@ -1,25 +1,25 @@
-NO Bochs VBE Support available!
-
-Bochs BIOS - build: 01/25/06
-$Revision: 1.160 $ $Date: 2006/01/25 17:51:49 $
-Options: apmbios pcibios eltorito
-
-ata0 master: Generic 1234 ATA-2 Hard-Disk (0 MBytes)
-
-Booting from Hard Disk...
-PiLo hda1
-Loading........
-Kernel command line: run prioirty-donate-one
-Pintos booting with 4,096 kB RAM...
-383 pages available in kernel pool.
-383 pages available in user pool.
-Calibrating timer...  204,600 loops/s.
-Boot complete.
-Executing 'prioirty-donate-one':
-Kernel PANIC at ../../tests/threads/tests.c:60 in run_test(): no test named "pri
-oirty-donate-one"
-Call stack: 0xc0027a22 0xc0029650 0xc0020735 0xc00206d5.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
+Max51load 0
+Cur50load 1
+Max50load 1
+Cur50load 0
+Max50load 0
+Cur49load 1
+Max49load 1
+Cur49load 0
+Max49load 0
+Cur48load 1
+Max48load 1
+Cur48load 0
+Max48load 0
+Cur47load 1
+Max47load 1
+Cur47load 0
+Max47load 0
+Cur46load 1
+Max46load 1
+Cur46load 0
+Max46load 0
+Cur45load 1
+Max45load 1
+Cur45load 0
 

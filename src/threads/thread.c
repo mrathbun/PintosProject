@@ -57,7 +57,9 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 static int load_avg;
 
-static int ready_threads;
+static struct thread *current_max;
+ 
+static struct thread *next_max;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -100,7 +102,6 @@ thread_init (void)
 
   /*Initialize the static variables used in MLFQS*/
   load_avg = 0;
-  ready_threads = 0;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -235,7 +236,7 @@ check_preempt(struct thread *t, bool flag)
   bool advCond = any_thread_get_priority(t) == thread_get_priority();
   bool rrCheck = advCond && flag && t !=thread_current();
 
-  if(normCond && rrCheck)
+  if(normCond || rrCheck)
   {
     if(!intr_context())
     {
@@ -282,7 +283,6 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
-  ready_threads++;
   t->status = THREAD_READY;
   
   intr_set_level (old_level);
@@ -432,30 +432,10 @@ struct list_elem* max_priority_elem(void)
   return list_max(&ready_list, list_comp_greater, 0);
 }
 
-struct thread* find_next_pri_elem()
+struct list_elem* next_max_priority_elem(void)
 {
-  struct thread *cur_thread = thread_current();
-  struct list_elem* next_elem = cur_thread->allelem.next;
-  int cur_priority = cur_thread->priority;
-  while(next_elem != &cur_thread->elem)
-  {
-    if(next_elem->next == NULL)
-    {
-      next_elem = list_front(&ready_list);
-    }
-    else if(list_entry(next_elem, struct thread, elem)->priority==cur_priority 
-         && list_entry(next_elem, struct thread, elem)->status==THREAD_READY)
-    {
-      return list_entry(next_elem, struct thread, elem);
-    }
-    else
-    {
-      next_elem = next_elem->next;
-    } 
-  }
-  return cur_thread; 
+  return list_max(&ready_list, list_comp_greater_next, 0); 
 }
-
 
 /* Sets the current thread's nice value to NICE. */
 void
@@ -464,10 +444,17 @@ thread_set_nice (int nice)
   thread_current()->nice = nice;
   thread_current()->priority = cPriority(thread_current()); 
   
+  
   if(!list_empty(&ready_list))
   { 
-    struct list_elem *waiting_Max = list_max(&ready_list, list_comp_greater, 0);
-    check_preempt(list_entry (waiting_Max, struct thread, elem), false);
+    if(thread_current() == current_max)
+    {
+      check_preempt(next_max, false);
+    }
+    else 
+    {
+      check_preempt(current_max, false);
+    }
   }
   
 }
@@ -501,7 +488,9 @@ thread_set_load_avg(void)
 int
 thread_get_ready_threads (void)
 {
-  return ready_threads;
+  int i = 0;
+  if(thread_current() != idle_thread) i = 1; 
+  return list_size(&ready_list) + i;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -599,7 +588,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->recent_cpu = 0; 
   if(thread_mlfqs)
   {
-    if(t->tid > 2)
+    if(t->tid >= 2)
     {
       t->nice = thread_get_nice();
       t->recent_cpu = thread_current()->recent_cpu;
@@ -633,6 +622,24 @@ bool list_comp_greater(const struct list_elem *max,
   struct thread *t = list_entry(cur, struct thread, elem);
   struct thread *threadMax = list_entry(max, struct thread, elem);
   return any_thread_get_priority(t) > any_thread_get_priority(threadMax);
+}
+
+bool list_comp_greater_next(const struct list_elem *max,
+                       const struct list_elem *cur, void *aux)
+{
+  struct thread *t = list_entry(cur, struct thread, elem);
+  struct thread *threadMax = list_entry(max, struct thread, elem);
+  return any_thread_get_priority(t) > any_thread_get_priority(threadMax) && t !=  current_max;
+}
+
+void set_current_max(struct thread *max_Thread)
+{
+  current_max = max_Thread;
+}
+
+void set_next_max(struct thread *max_Thread)
+{
+  next_max = max_Thread;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
