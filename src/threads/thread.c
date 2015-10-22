@@ -55,10 +55,13 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+/* floating-point representation of load_avg used for mlfqs */
 static int load_avg;
 
+/* keeps track of thread with highest priority */
 static struct thread *current_max;
  
+/* keeps track of thread with second highest priority */
 static struct thread *next_max;
 
 /* If false (default), use round-robin scheduler.
@@ -135,6 +138,8 @@ thread_tick (void)
   struct thread *t = thread_current ();
   
   /* Update statistics. */
+  /* increments the current thread's recent_cpu by 1 if it is
+     not the idle thread */
   if (t == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
@@ -377,7 +382,9 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's priority to NEW_PRIORITY. 
+   It then checks for preemtion to see if it is no longer
+   the highest priority thread. */
 void
 thread_set_priority (int new_priority) 
 {
@@ -397,7 +404,10 @@ thread_get_priority (void)
   return any_thread_get_priority(thread_current());
 }
 
-/*Must return max of donated priority and member priority*/
+/* Must return max of donated priority and member priority
+   if in mlfqs mode or the thread holds no locks.  Else,
+   it should return the thread with the highest priority 
+   in the waiting list. */
 int
 any_thread_get_priority (struct thread *t) 
 {
@@ -427,17 +437,27 @@ any_thread_get_priority (struct thread *t)
   }
 }
 
+/* return the thread with the max priority in the ready list */
 struct list_elem* max_priority_elem(void)
 {
   return list_max(&ready_list, list_comp_greater, 0);
 }
 
+/* returns the thread with the second highest priority in the ready list */
 struct list_elem* next_max_priority_elem(void)
 {
   return list_max(&ready_list, list_comp_greater_next, 0); 
 }
 
-/* Sets the current thread's nice value to NICE. */
+/* Sets the current thread's nice value to NICE.
+   Then recalculates priority. It then checks
+   for preemtion. This is where the second highest 
+   priority is used. In the case that the thread that
+   had it's nice value changed had the highest priority,
+   it must be checked against the thread that has the 
+   second highest priority for preemption. The reason
+   it is calculated beforehand in the timer interrupt is
+   to cut down on execution time. */
 void
 thread_set_nice (int nice) 
 {
@@ -473,18 +493,23 @@ thread_get_load_avg (void)
   return cLoad_Avg_Final();
 }
 
+/* returns the fixed-point representation of load_avg */
 int
 thread_get_load_avg_fixed(void) 
 {
   return load_avg;
 }
 
+/* sets load_avg by calling the calculation */
 void 
 thread_set_load_avg(void) 
 {
   load_avg = cLoad_Avg_Fixed(); 
 }
 
+/* Returns the number of threads in ready list. 
+   This will check also to see if the idle thread is 
+   running. If it is, do not count the idle thread. */
 int
 thread_get_ready_threads (void)
 {
@@ -586,6 +611,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->nice = 0;
   t->recent_cpu = 0; 
+  /* set nice, recent_cpu, and calculate priority for mlfqs */
   if(thread_mlfqs)
   {
     if(t->tid >= 2)
@@ -616,6 +642,7 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+/* Used to compare a threads priority to the thread with the max priority */
 bool list_comp_greater(const struct list_elem *max, 
                        const struct list_elem *cur, void *aux)
 {
@@ -624,6 +651,8 @@ bool list_comp_greater(const struct list_elem *max,
   return any_thread_get_priority(t) > any_thread_get_priority(threadMax);
 }
 
+/* Used to compare a threads priority to the thread with the second highest
+   priority */
 bool list_comp_greater_next(const struct list_elem *max,
                        const struct list_elem *cur, void *aux)
 {

@@ -131,6 +131,11 @@ Wenhua Lin <wenhuali@buffalo.edu>
       -Stores all of the threads waiting on a lock being held by this thread.
        Allows for priority donation to occur. 
 
+   Changed from initial:
+   
+   -struct list lock_list;
+      -Stores all of the locks that a thread currently holds. Used for priority
+       donation.
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -145,7 +150,14 @@ Wenhua Lin <wenhuali@buffalo.edu>
     list. This will give each waiting thread the chance to check for a higher
     priority thread in its list. 
 
-    -ASCII Representation of nested priority donation:
+   Changed from initial:
+
+   -Each thread has a list of locks that it currently holds.  To determine 
+    priority, a thread iterates through all of the threads waiting on the locks
+    it is holding. A thread's priority will be the max priority between that 
+    thread and all the threads waiting on a lock that it holds.
+
+   -ASCII Representation of nested priority donation:
 
                      High
                        |
@@ -200,7 +212,13 @@ Wenhua Lin <wenhuali@buffalo.edu>
     will then add all of the threads still waiting on the lock to its 
     wait_list. This is done even though it is the highest priority thread at
     the time, as nested donation could change that ordering.
-    
+
+   Changed from Initial:
+
+   -The thread that releases the lock removes that lock from its lock_list.
+    The highest priority waiting thread will add that lock to its lock_list.
+    This will be reflected in all future calculations of priority.
+       
 ---- SYNCHRONIZATION ----
 
 >> B6: Describe a potential race in thread_set_priority() and explain
@@ -253,6 +271,9 @@ Wenhua Lin <wenhuali@buffalo.edu>
           -Holds the recent_cpu calculation for the thread. Represents how 
            much cpu time the thread has used recently. 
 
+       Changed from Initial:
+       
+       -made recent_cpu an int represented in fixed-point
 
    -In thread.c:
   
@@ -260,14 +281,28 @@ Wenhua Lin <wenhuali@buffalo.edu>
        -static float load_avg;
           -Holds the moving waited average of the number of threads waiting for
            cpu time. This is used in the calculation of recent_cpu. 
+
+       Changed from Initial:
+       
+       -made load_avg an int represented in fixed-point
  
        -static int ready_threads;
           -Holds the number of ready_threads. This is used in the calculation 
            of load_avg.
 
+       Changed from Initial:
+
+       -No more ready_threads. We simply got the size of ready_list using 
+        a helper function.
+
        -static struct list priority_queues[64];
           -Implemented as an array of size 64 for which each index gives a 
-           queue of threads at that given priority. 
+           queue of threads at that given priority.
+
+       Changed from Initial:
+
+       -We did not use priority_queues, instead we just used all_list to hold
+        all of the threads.  
 
 ---- ALGORITHMS ----
 
@@ -350,6 +385,13 @@ ticks   A   B   C   A   B   C   to run
     fixed point operations than an implementation with no abstraction. The 
     reason for this is that the code becomes more reusable and transparent to 
     the reader.     
+
+   Changed from Initial:
+
+   -We misunderstood the question and kept referring to it as float in the
+    answer.  We actually implemented a 17.14 format fixed-point c file that
+    handles fixed-point calculations.  We still used functions to create an
+    abstraction layer but did not create an abstract data type.  
 
 			   SURVEY QUESTIONS
 			   ================
