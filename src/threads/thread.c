@@ -143,13 +143,17 @@ thread_tick (void)
   if (t == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
-  else if (t->pagedir != NULL)
+  else if (t->pagedir != NULL) 
+  {
     t->recent_cpu = faddn(t->recent_cpu, 1);
     user_ticks++;
+  }
 #endif
   else
+  {
     t->recent_cpu = faddn(t->recent_cpu, 1);
     kernel_ticks++;
+  }
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
