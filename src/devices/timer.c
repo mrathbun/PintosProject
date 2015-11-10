@@ -90,7 +90,8 @@ timer_elapsed (int64_t then)
 }
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+   be turned on. The blocked thread is blocked by waiting on sleepSem
+   until the amount of ticks passes, then the sleepSem is signaled. */
 void
 timer_sleep (int64_t ticks) 
 { 
@@ -182,12 +183,21 @@ timer_interrupt (struct intr_frame *args UNUSED)
   enum intr_level old_level;
   old_level = intr_disable();
   thread_foreach(update_sleep, 0);
+  /* In mlfqs for second that passes, recalculate load average
+     and recent_cpu for all threads. */
   if(thread_mlfqs && timer_ticks() % TIMER_FREQ == 0) 
   {
     thread_set_load_avg();
     thread_foreach(update_recent_cpu, 0);
   } 
-
+  
+  /* In mlfqs for every four ticks update the current running
+     thread's priority. If a second has passed then recalculate
+     every thread's priority. After doing this, check for preemption.
+     This is done by finding the highest priority thread and second
+     highest priority and seeing if the second highest priority thread
+     is now the highest priority thread. check_preemt handles this while 
+     the calculations are done beforehand in here. */
   if(thread_mlfqs && timer_ticks() % 4 == 0)
   { 
     if(timer_ticks() % TIMER_FREQ == 0)
@@ -209,6 +219,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
   intr_set_level (old_level); 
 }
 
+/* Checks to see if enough ticks have passed to signal sleepSem and
+   unblock the thread */
 static void
 update_sleep (struct thread *t, void *aux UNUSED) {
   if(t->status == THREAD_BLOCKED && t->remainingTicks > 0) {
@@ -219,11 +231,13 @@ update_sleep (struct thread *t, void *aux UNUSED) {
   }
 } 
 
+/* Recalculates and sets the recent_cpu in fixed-point format */
 static void
 update_recent_cpu (struct thread *t, void *aux UNUSED) {
   t->recent_cpu = cRecent_Cpu_Fixed(t);
 }
 
+/* Recalculates and sets the new priority for t */
 static void
 update_priority (struct thread *t, void *aux UNUSED) {
   if(t != NULL)

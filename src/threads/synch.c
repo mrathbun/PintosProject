@@ -104,7 +104,11 @@ sema_try_down (struct semaphore *sema)
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
-   This function may be called from an interrupt handler. */
+   This function may be called from an interrupt handler. 
+
+   The thread with the highest priority in the waiting list gets added
+   to the ready_list. If it has a higher priority than the    
+   running thread, then the running thread will be preempted. */
 void
 sema_up (struct semaphore *sema) 
 {
@@ -199,7 +203,10 @@ lock_init (struct lock *lock)
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. */
+   we need to sleep. 
+
+   When the thread gets a lock, that lock is pushed back in the thread's
+   lock_list. */
 void
 lock_acquire (struct lock *lock)
 {
@@ -236,7 +243,9 @@ lock_try_acquire (struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler. */
+   handler. 
+
+   Removes the lock from the current holder's lock_list. */
 void
 lock_release (struct lock *lock) 
 {
@@ -320,7 +329,11 @@ cond_wait (struct condition *cond, struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
-   interrupt handler. */
+   interrupt handler. 
+
+   The thread with the highest priority in the waiting list gets added
+   to the ready_list. If it has a higher priority than the    
+   running thread, then the running thread will be preempted.*/
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
 {
