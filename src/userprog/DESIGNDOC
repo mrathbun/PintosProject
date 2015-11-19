@@ -38,14 +38,36 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+Using strtok_r(), we will receive the arguments in a left to right order. 
+We will push each "string" in the order we receive them, and store each memory 
+address to which they are pushed in a list. Since we want the order of the 
+actual arguments to be push in reverse, we will iterate over the list in a 
+reverse order, and push the memory locations as we come across them.  
+
+How to handle overflow???????????????????
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+strtok_r() is considered thee "reentrant" version of strtok(). That is, it has 
+the same basic functionality as strtok(), but is also considered thread safe
+when stored in dynamic memory. This is essential for an operating system, as
+there are likely to be multiple threads running at any given time.
+ 
 
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
+The two main advantages are that the system calls are now faster and safer.
+-
+-
+-
+-
+-
+-
+-
 			     SYSTEM CALLS
 			     ============
 
