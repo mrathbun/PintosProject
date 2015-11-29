@@ -30,14 +30,14 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -69,6 +69,7 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -456,8 +457,13 @@ setup_stack (void **esp, const char* file_name, char* args)
   struct list args_list;
   list_init (&args_list);
 
-  struct args_holder arg;  
+ /*
+ * Temporary Hack
+ * 
+ */
 
+  struct args_holder argsHolders[10];  
+  
   if(length % 4 != 0)
   {
     int i;
@@ -470,8 +476,8 @@ setup_stack (void **esp, const char* file_name, char* args)
 
   *esp -= length;
   *esp = memcpy(*esp, file_name, length); 
-  arg.arg_start = (char*)(*esp);
-  list_push_front(&args_list, &arg.elem);
+  argsHolders[0].arg_start = (char*)(*esp);
+  list_push_front(&args_list, &argsHolders[0].elem);
 
   argc++;
  
@@ -492,14 +498,19 @@ setup_stack (void **esp, const char* file_name, char* args)
    
     *esp -= length;
     *esp = memcpy(*esp, token, length);
-    arg.arg_start = (char*)(*esp);
-    list_push_front(&args_list, &arg.elem);
-
+    
+    argsHolders[argc].arg_start = (char*)(*esp);
+    
+    list_push_front(&args_list, &argsHolders[argc].elem);
+  
     argc++;
   }
 
+  //printf("List size: %d\n", (int)list_size(&args_list));
+
   *esp -= 4;
-  memcpy(*esp, token, 4);  
+  memcpy(*esp, "\0", 1);  
+
 
   struct list_elem *e;
   for (e = list_begin (&args_list); e != list_end (&args_list);
@@ -507,8 +518,9 @@ setup_stack (void **esp, const char* file_name, char* args)
     {
       struct args_holder *a = list_entry (e, struct args_holder, elem);
       *esp -= 4;
-      memcpy(*esp, a->arg_start, 4);  
+      memcpy(*esp, &(a->arg_start), 4);  
     }
+
 
   char* temp = (char*)(*esp);
   *esp -= 4;

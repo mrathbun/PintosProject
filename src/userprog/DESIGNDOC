@@ -32,6 +32,15 @@ Wenhua Lin <wenhuali@buffalo.edu>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct args_holder
+{
+  char* arg_start;
+  struct list_elem elem;
+};
+
+-Used to put "strings" into a list. We do this so that we 
+can put the argument pointers on the stack in the correct order.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
@@ -42,9 +51,13 @@ Using strtok_r(), we will receive the arguments in a left to right order.
 We will push each "string" in the order we receive them, and store each memory 
 address to which they are pushed in a list. Since we want the order of the 
 actual arguments to be push in reverse, we will iterate over the list in a 
-reverse order, and push the memory locations as we come across them.  
+reverse order, and push the memory locations as we come across them. To avoid 
+overflow, we simply keep track of the number of spaces that the stack pointer 
+has moved. If it gets to a point that it will exceed the allocated 4kB, then 
+we will kill the process and free its memory.
 
-How to handle overflow???????????????????
+Note: We are not sure what the expected behavior is when the stack overflows.
+We are killing the process for now.       
 
 ---- RATIONALE ----
 
@@ -60,14 +73,15 @@ there are likely to be multiple threads running at any given time.
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
-The two main advantages are that the system calls are now faster and safer.
--
--
--
--
--
--
--
+The first benefit is that the kernel is allowed to focus on its more important 
+tasks. The abstraction of argument parsing to user space allows for the 
+trivial aspects to be taken care of before passing to the kernel, which avoids 
+burdening the kernel with unneccessary tasks. The second benefit is that it is 
+much safer to handle parsing in the user space. If a stack overflow, or some
+other error, is detected in the kernel, this could actually effect the core 
+operating system. If it is handled in user space, then no harm is done.       
+
+
 			     SYSTEM CALLS
 			     ============
 
@@ -77,14 +91,77 @@ The two main advantages are that the system calls are now faster and safer.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In syscall:
+
+-struct semaphore readerMutex;
+
+  -Used to control access to the number of readers in the readers-writers 
+implementation of our file access system.
+
+-struct semaphore writeMutex;
+
+  -Used to control access to the file system. Either one writing process can
+access the system, or a bunch of reading processes.   
+
+-struct semaphore openMutex;
+Slight abstraction on the readers-writers implementation. We don't want to 
+open same file at once, so we limit access.   
+
+In process:
+
+-struct list children;
+
+  -List of all children processes for a process. Used to ensure valid waiting.
+
+-struct list currently_waiting;
+
+  -List of all processes being waited on. Used to ensure valid waiting.
+
+-struct process_child
+ {
+   int pid;
+   struct list_elem elem; 
+ };
+
+-struct sema_share
+ {
+   int exit_code;
+   struct semaphore sema;
+   bool hasExited;
+ };
+  
+  -Allows for the ids of child processes to be stored in a list.
+
+-struct list clean_up_list;
+          
+  -Holds all of the synch elements and buffers to allow for dynamic deallocation
+of memory whenever an exception is encountered or a process must exit.
+
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+When a file is opened, a file descriptor for that file is returned. The file 
+descriptor is unique every time a file is opened. So if the same file is 
+opened more than once, whether it be across processes or by the same process, a
+new file descriptor will be returned each time. So file descriptors are unique 
+within the entire OS.     
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+For this, we used the idea that any number of processes can be reading from 
+a critical section at once, but only one process can be writing. Thus, we 
+decided to implement memory access by using the readers-writers problem from
+class. So we monitor all processes that seek to access the memory. A semaphore 
+for updating number of readers, as well as another semaphore for actual access 
+to the file system are used. Any amount of files can be read at once, but 
+we make sure that if a file is being written to, the only way that can happen 
+is if that process is the only one in the file system. Furthermore, we take the 
+precaution of synchronizing the opening of files.      
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -93,8 +170,23 @@ The two main advantages are that the system calls are now faster and safer.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+The number of calls to pagedir_get_page() would be the same in theory for a
+full page and for a chunk of 2 bytes. This is because pagedir_get_page() simply
+looks for the first open page, it doesn't look for openings based on size. 
+Thus, significant improvements can be made that would allow for small memory 
+chunks to be added to the end of a page that isn't using its full allocated 
+space.
+   
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+First we check if the process that is to be waited on is already being waited
+on, and if it is a direct child of the parent process. If either of these are 
+false, then we automatically return -1. Otherwise, we need to wait for the exit
+code of the process to be waited on. Once we obtain this, we can see whether 
+the child process was killed by the kernel or by calling exit(). If it is from 
+calling exit(). we return the exit code. Otherwise, we return -1.     
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -110,12 +202,39 @@ The two main advantages are that the system calls are now faster and safer.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+Our main strategy for dealing with errors is to abstract the error handling to a
+central method or set of methods. Thus, we can robustly handle errors without
+obfuscating the true meaning of the code. We can do this by examining common
+areas for errors to occur, and then creating functions to handle multiple cases.
+By making the code more modular, we make the code more manageable for the 
+reader.
+
+All of the local and instance variables for a process will be cleaned up in 
+process_exit, as the process is destroyed. However, there can also be 
+dynamically allocateed memory (buffers) that is forgotten, along with 
+synchronization elements that aren't properly released. An example of this would
+be when the read syscall is trying to open a file. Since the file system is not
+concurrent, we use a semaphore to mutually exclude accesses to the file system.
+If an error occurs while reading the file, then we need to also release the
+semaphore before the process is killed. To handle these situations, we are 
+creating a list of all buffers and synchronization elements held by a process 
+at any given time. Based on the type of element, we will generically handle 
+either releasing the synch element or freeing memory.         
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+In exec, we call process_execute(). This function takes care of all of the 
+process loading. If the loading is successful, then exec will return the thread
+id of the thread running the executable. If it isn't, it returns the constant
+TID_ERROR. Thus, the parent process will just wait for this function to return,
+as the thread of control will be in process_execute any way. No synchronization
+is needed because the parent process can't advance out of exec until the 
+function call returns.        
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -124,16 +243,51 @@ The two main advantages are that the system calls are now faster and safer.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+Our idea is to create a new semaphore struct that also holds information on 
+the child process' exit code. This struct will be initialized when the child
+process is spawned, and will be shared by the parent process and the child 
+process. When the child process exits, it will call sema_up() on the semaphore
+and update the exit value. Thus, regardless of when the parent P calls wait(C)
+with respect to the child, it will be able to see the proper result and handle 
+the waiting properly. As for the resource deallocation, since there is just one
+shared structure, it is easy to handle this when a process exits. If P doesn't 
+wait, then P will still handle cleaning up the new semaphore struct, regardless
+of whether it terminates before or after C. Same for C. As for special cases,
+our implementation is robust enough that it should handle all scenarios.       
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+We decided to make use of the code already present in order to validate the 
+address before allowing access to it. While this may be a little slower than 
+handling invalid addressing in the page fault exception handler, it is much 
+simpler, and does not befog the meaning of the code in a morass of optimization
+attempts. We used the functions is_user_vaddr(esp) and 
+pagedir_get_page(thread_current()->pagedir, esp) to check that the address is 
+in user space and that it is mapped. If it is valid, then we handle the syscall.
+If it isn't, then we exit the process and free all of its resources. 
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+So for file descriptors, we decided to have a static running count of the open
+files thus far. Since file descriptors should be unique across the whole 
+operating system, this approach allows for us to create a unique file descriptor
+every time that a new file is opened. This varaible will start at 2 so as not 
+to be confused with the console descriptors. As mentioned, the pros are that 
+this nicely allows us to get a new descriptor everytime when needed while still
+taking up minimal memory space. The con is that it introduces a global state, 
+which is always dangerous if not handled properly. We will combat this by using
+a semaphore to limit access to the opening of files. 
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We did not make a change to the mapping. Since processes and threads are 
+essentially the same thing in Pintos, the default mapping is sufficient for 
+what we are trying to do.
 
 			   SURVEY QUESTIONS
 			   ================

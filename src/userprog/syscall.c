@@ -20,7 +20,7 @@ check_valid_pointer (void* esp)
 {
   if(is_user_vaddr(esp)) 
   {
-    return pagedir_get_page(thread_current()->pagedir, esp) == NULL;
+    return pagedir_get_page(thread_current()->pagedir, esp) != NULL;
   }
   else
   {
@@ -36,8 +36,57 @@ syscall_handler (struct intr_frame *f)
   void *esp = f->esp;
   if(check_valid_pointer(esp))
   {
-    //Handle syscall
-  
+    int syscallNum = *(int*)(esp);
+    hex_dump(0, esp, 100, true);
+    switch(syscallNum) {
+      case SYS_HALT:
+
+        break;
+      case SYS_EXIT:
+        //Add code for passing status to parent
+        process_exit();   
+        break;
+      case SYS_EXEC:
+
+        break;
+      case SYS_WAIT:
+
+        break;
+      case SYS_CREATE:
+
+        break;
+      case SYS_REMOVE:
+
+        break;
+      case SYS_OPEN:
+
+        break;
+      case SYS_FILESIZE:
+
+        break;
+      case SYS_READ:
+
+        break;
+      case SYS_WRITE:
+        printf("Write called\n");
+        esp += 8;
+        printf("String written: %s\n", (char*)(esp));
+        break;
+      case SYS_SEEK:
+
+        break;
+      case SYS_TELL:
+
+        break;
+      case SYS_CLOSE:
+
+        break;
+      default:
+        printf("Unexpected syscall\n");
+        break;
+       
+    }
+    
   }
   else 
   {
