@@ -338,7 +338,12 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  intr_disable ();
+  list_remove (&thread_current()->allelem);
   process_exit ();
+  return;
+  //thread_current()->status = THREAD_DYING;
+  //schedule ();
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -630,6 +635,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->remainingTicks = 0;
   sema_init(&(t->sleepSem), 0);
   list_init(&t->lock_list);
+  list_init(&t->file_list);
   list_push_back (&all_list, &t->allelem);
 }
 

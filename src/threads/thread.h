@@ -97,6 +97,7 @@ struct thread
     int64_t remainingTicks;
     struct semaphore sleepSem;
     struct list lock_list;
+    struct list file_list;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

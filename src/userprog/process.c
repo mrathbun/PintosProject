@@ -462,7 +462,7 @@ setup_stack (void **esp, const char* file_name, char* args)
  * 
  */
 
-  struct args_holder argsHolders[10];  
+  struct args_holder argsHolders[30];  
   
   if(length % 4 != 0)
   {
