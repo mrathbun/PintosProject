@@ -4,11 +4,15 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <console.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "filesys/filesys.h"
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -37,10 +41,13 @@ check_valid_pointer (const void* esp)
    
 }
 
+/*
+ *Should this be more robust?
+ */
 void check_valid_buffer(void* esp, int offset)
 {
   char* checkBuffer = *(char**)(esp + offset);
-  if(!check_valid_pointer((void*)checkBuffer))
+  if(!check_valid_pointer(checkBuffer))
   {
     exit(-1);
   }
@@ -54,6 +61,7 @@ syscall_handler (struct intr_frame *f)
   if(check_valid_pointer(esp))
   {
     int syscallNum = *(int*)(esp);
+    //printf("Syscall: %d\n", syscallNum);
     int result;
     //hex_dump(0, esp, 100, true);
     switch(syscallNum) {
@@ -83,10 +91,16 @@ syscall_handler (struct intr_frame *f)
         f->eax = result;
         break;
       case SYS_FILESIZE:
-
+        result = filesize(*(int*)(esp + 4));
+        f->eax = result; 
         break;
       case SYS_READ:
-
+        if(!check_valid_pointer(esp + 8))
+        {
+          exit(-1);
+        }
+        result = read(*(int*)(esp + 4), esp + 8, *(int*)(esp + 12));
+        f->eax = result; 
         break;
       case SYS_WRITE:
         check_valid_buffer(esp, 8);
@@ -94,13 +108,13 @@ syscall_handler (struct intr_frame *f)
         f->eax = result;
         break;
       case SYS_SEEK:
-
+        seek(*(int*)(esp + 4), *(int*)(esp + 8));
         break;
       case SYS_TELL:
 
         break;
       case SYS_CLOSE:
-        
+        close(*(int*)(esp + 4));       
         break;
       default:
         printf("Unexpected syscall\n");
@@ -122,12 +136,8 @@ void halt (void)
 void exit (int status)
 {
   //Handle passing exit code to parent
-  //printf("args-none: exit(%d)\n", status);
-  //#ifdef USERPROG
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
-  //#endif
-  //syscall_exit();
 }
 
 int exec (const char *file)
@@ -157,30 +167,57 @@ int open (const char *file)
 {
   int fd = -1;
   struct thread* cur = thread_current();
-  printf("File is opened\n");
   sema_down(&file_sema);
+  
   struct file* tempFile = filesys_open(file);
   if(tempFile != NULL)
   {
     fd = globalfd++;
-    struct file_mapper mapper;
-    mapper.fd = fd;
-    mapper.file = tempFile;  
- 
-    list_push_back(&(cur->file_list), &(mapper.elem));
+    void* tempMapper = malloc(sizeof(struct file_mapper)); 
+    struct file_mapper *mapper = (struct file_mapper*)tempMapper;
+    mapper->fd = fd;
+    mapper->open_file = tempFile;  
+    list_push_back(&(cur->file_list), &(mapper->elem));
   }
   
   sema_up(&file_sema);     
   return fd; 
 }
 
-int filesize (int fd){
-  return 0;
+int filesize (int fd)
+{
+  int result = 0;
+  sema_down(&file_sema);
+  struct file *f = mapFile(fd);
+  if(f != NULL)
+  {
+    result = file_length(f);
+  }
+  sema_up(&file_sema);
+  return result;
 }
 
 int read (int fd, void *buffer, unsigned length)
 {
-  return 0;
+  if(fd == 0)
+  {
+    unsigned i;
+    for(i = 0; i < length; i++) {
+      char c = (char)input_getc();
+      memcpy(buffer, &c, 1);
+    } 
+    return length;
+  }
+
+  int result = -1; 
+  sema_down(&file_sema);
+  struct file *f = mapFile(fd);
+  if(f != NULL)
+  {
+    result = file_read(f, buffer, length);
+  }
+  sema_up(&file_sema);
+  return result;
 }
 
 int write (int fd, const void *buffer, unsigned length)
@@ -190,15 +227,27 @@ int write (int fd, const void *buffer, unsigned length)
     putbuf(*(char**)buffer, length);
     return length;
   }
-  else 
+  
+  sema_down(&file_sema);
+  struct file* writeFile = mapFile(fd);
+  int bytesWritten = 0; 
+  if(writeFile != NULL)
   {
-    return 0;
+    bytesWritten = file_write(writeFile, buffer, length);    
   }
+  sema_up(&file_sema);
+  return bytesWritten;
 }
 
 void seek (int fd, unsigned position)
 {
-  return;
+  sema_down(&file_sema);
+  struct file *f = mapFile(fd);
+  if(f != NULL)
+  {
+    file_seek(f, position);
+  }
+  sema_up(&file_sema);  
 }
 
 unsigned tell (int fd)
@@ -209,7 +258,7 @@ unsigned tell (int fd)
 void close (int fd)
 {
   sema_down(&file_sema);
-  struct file* file = mapFile(fd);  
+  struct file* file = mapFile(fd);
   file_close(file);
   sema_up(&file_sema);
 }
@@ -220,16 +269,17 @@ void close (int fd)
  */
 struct file* mapFile(int fd) 
 {
-  struct list f_list = thread_current()->file_list;
+
   struct list_elem *e;
 
-  for(e = list_begin (&f_list); e != list_end (&f_list);
+  for(e = list_begin (&thread_current()->file_list); 
+      e != list_end (&thread_current()->file_list);
       e = list_next (e))
   {
-    struct file_mapper* temp = list_entry (e, struct file_mapper, elem);
+    struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
     if(temp->fd == fd)
     {
-      return temp->file;
+      return temp->open_file;
     }  
   } 
 

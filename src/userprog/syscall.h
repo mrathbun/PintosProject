@@ -8,7 +8,7 @@
 struct file_mapper
 {
   int fd;
-  struct file* file;
+  struct file* open_file;
   struct list_elem elem;
 };
 
