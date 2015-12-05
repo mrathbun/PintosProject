@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -98,6 +99,7 @@ struct thread
     struct semaphore sleepSem;
     struct list lock_list;
     struct list file_list;
+    struct semaphore waitSem; 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -160,5 +162,7 @@ void set_next_max(struct thread *max_Thread);
 
 struct list_elem* max_priority_elem(void);
 struct list_elem* next_max_priority_elem(void);
+
+struct thread* get_thread_from_tid(tid_t tid); 
 
 #endif /* threads/thread.h */

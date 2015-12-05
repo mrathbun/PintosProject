@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -28,7 +29,7 @@ static bool load (const char *cmdline, char *args, void (**eip) (void), void **e
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *name_copy;
   tid_t tid;
   
   /* Make a copy of FILE_NAME.
@@ -36,10 +37,18 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
-  
+  strlcpy (fn_copy, file_name, PGSIZE);  
+
+  name_copy = palloc_get_page(0);
+  if (name_copy == NULL)
+    return TID_ERROR;
+  strlcpy (name_copy, file_name, PGSIZE); 
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  char *save_ptr;
+  name_copy = strtok_r(name_copy, " ", &save_ptr);
+
+  tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -64,7 +73,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, save_ptr, &if_.eip, &if_.esp);
-
+ 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -91,10 +100,21 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid ) 
 {
-  while(true){}
-  return -1;
+  struct thread* t = get_thread_from_tid(child_tid);
+  
+  //Handle all invalid input
+  if(t == NULL)
+  {
+    //printf("Reached: %d\n", child_tid);
+    return -1;
+  }
+  else 
+  {
+    sema_down(&(t->waitSem)); 
+    return 0;
+  }
 }
 
 /* Free the current process's resources. */
@@ -103,10 +123,12 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+  
+  sema_up(&(cur->waitSem));
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -308,7 +330,8 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
           break;
         }
     }
-
+  
+   
   /* Set up stack. */
   if (!setup_stack (esp, file_name, args))
     goto done;

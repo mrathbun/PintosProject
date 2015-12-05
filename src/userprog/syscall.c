@@ -24,7 +24,7 @@ syscall_init (void)
 }
 
 bool 
-check_valid_pointer (void* esp)
+check_valid_pointer (const void* esp)
 {
   if(is_user_vaddr(esp)) 
   {
@@ -35,6 +35,15 @@ check_valid_pointer (void* esp)
     return false;
   }
    
+}
+
+void check_valid_buffer(void* esp, int offset)
+{
+  char* checkBuffer = *(char**)(esp + offset);
+  if(!check_valid_pointer((void*)checkBuffer))
+  {
+    exit(-1);
+  }
 }
 
 static void
@@ -49,7 +58,7 @@ syscall_handler (struct intr_frame *f)
     //hex_dump(0, esp, 100, true);
     switch(syscallNum) {
       case SYS_HALT:
-
+        halt();
         break;
       case SYS_EXIT:
         exit(*(int*)(esp + 4));   
@@ -61,14 +70,16 @@ syscall_handler (struct intr_frame *f)
 
         break;
       case SYS_CREATE:
-
+        check_valid_buffer(esp, 4); 
+        result = create(*(char**)(esp + 4), *(int*)(esp + 8));
+        f->eax = result;  
         break;
       case SYS_REMOVE:
 
         break;
       case SYS_OPEN:
+        check_valid_buffer(esp, 4);
         result = open(*(char**)(esp + 4));
-        printf("File num: %d\n", result);
         f->eax = result;
         break;
       case SYS_FILESIZE:
@@ -78,6 +89,7 @@ syscall_handler (struct intr_frame *f)
 
         break;
       case SYS_WRITE:
+        check_valid_buffer(esp, 8);
         result = write(*(int*)(esp + 4), esp + 8, *(int*)(esp + 12));  
         f->eax = result;
         break;
@@ -88,7 +100,7 @@ syscall_handler (struct intr_frame *f)
 
         break;
       case SYS_CLOSE:
-
+        
         break;
       default:
         printf("Unexpected syscall\n");
@@ -111,7 +123,11 @@ void exit (int status)
 {
   //Handle passing exit code to parent
   //printf("args-none: exit(%d)\n", status);
+  //#ifdef USERPROG
+  printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
+  //#endif
+  //syscall_exit();
 }
 
 int exec (const char *file)
@@ -126,7 +142,10 @@ int wait (int childProc)
 
 bool create (const char *file, unsigned initial_size)
 {
-  return false; 
+  sema_down(&file_sema);
+  bool success = filesys_create(file, initial_size);
+  sema_up(&file_sema); 
+  return success; 
 }
 
 bool remove (const char *file)
@@ -137,6 +156,8 @@ bool remove (const char *file)
 int open (const char *file)
 {
   int fd = -1;
+  struct thread* cur = thread_current();
+  printf("File is opened\n");
   sema_down(&file_sema);
   struct file* tempFile = filesys_open(file);
   if(tempFile != NULL)
@@ -144,9 +165,9 @@ int open (const char *file)
     fd = globalfd++;
     struct file_mapper mapper;
     mapper.fd = fd;
-    mapper.file = file;  
+    mapper.file = tempFile;  
  
-    list_push_back(&thread_current()->file_list, &mapper.elem);
+    list_push_back(&(cur->file_list), &(mapper.elem));
   }
   
   sema_up(&file_sema);     
@@ -187,6 +208,31 @@ unsigned tell (int fd)
 
 void close (int fd)
 {
-  return;
+  sema_down(&file_sema);
+  struct file* file = mapFile(fd);  
+  file_close(file);
+  sema_up(&file_sema);
+}
+
+/*
+ * Returns the file that corresponds with the file descriptor fd,
+ * or null if there isn't and open file with that descriptor. 
+ */
+struct file* mapFile(int fd) 
+{
+  struct list f_list = thread_current()->file_list;
+  struct list_elem *e;
+
+  for(e = list_begin (&f_list); e != list_end (&f_list);
+      e = list_next (e))
+  {
+    struct file_mapper* temp = list_entry (e, struct file_mapper, elem);
+    if(temp->fd == fd)
+    {
+      return temp->file;
+    }  
+  } 
+
+  return NULL;   
 }
 

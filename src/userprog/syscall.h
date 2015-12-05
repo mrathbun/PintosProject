@@ -5,8 +5,16 @@
 #include <list.h>
 #include "filesys/file.h"
 
+struct file_mapper
+{
+  int fd;
+  struct file* file;
+  struct list_elem elem;
+};
+
 void syscall_init (void);
-bool check_valid_pointer (void* esp);
+bool check_valid_pointer (const void* esp);
+void check_valid_buffer(void* esp, int offset);
 
 void halt (void);
 void exit (int status);
@@ -22,11 +30,6 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
-struct file_mapper
-{
-  int fd;
-  struct file* file;
-  struct list_elem elem;
-};
+struct file* mapFile(int fd);
 
 #endif /* userprog/syscall.h */
