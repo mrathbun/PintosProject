@@ -46,8 +46,7 @@ check_valid_pointer (const void* esp)
  */
 void check_valid_buffer(void* esp, int offset)
 {
-  char* checkBuffer = *(char**)(esp + offset);
-  if(!check_valid_pointer(checkBuffer))
+  if(!check_valid_pointer(*(char**)(esp + offset)))
   {
     exit(-1);
   }
@@ -95,10 +94,7 @@ syscall_handler (struct intr_frame *f)
         f->eax = result; 
         break;
       case SYS_READ:
-        if(!check_valid_pointer(esp + 8))
-        {
-          exit(-1);
-        }
+        check_valid_buffer(esp, 8); 
         result = read(*(int*)(esp + 4), esp + 8, *(int*)(esp + 12));
         f->eax = result; 
         break;
@@ -111,7 +107,7 @@ syscall_handler (struct intr_frame *f)
         seek(*(int*)(esp + 4), *(int*)(esp + 8));
         break;
       case SYS_TELL:
-
+        tell(*(int*)(esp + 4));
         break;
       case SYS_CLOSE:
         close(*(int*)(esp + 4));       
@@ -175,6 +171,7 @@ int open (const char *file)
     fd = globalfd++;
     void* tempMapper = malloc(sizeof(struct file_mapper)); 
     struct file_mapper *mapper = (struct file_mapper*)tempMapper;
+    mapper->name = file;
     mapper->fd = fd;
     mapper->open_file = tempFile;  
     list_push_back(&(cur->file_list), &(mapper->elem));
@@ -188,7 +185,7 @@ int filesize (int fd)
 {
   int result = 0;
   sema_down(&file_sema);
-  struct file *f = mapFile(fd);
+  struct file* f = mapFile(fd);
   if(f != NULL)
   {
     result = file_length(f);
@@ -211,10 +208,10 @@ int read (int fd, void *buffer, unsigned length)
 
   int result = -1; 
   sema_down(&file_sema);
-  struct file *f = mapFile(fd);
+  struct file* f = mapFile(fd);
   if(f != NULL)
   {
-    result = file_read(f, buffer, length);
+    result = file_read(f, *(char**)buffer, length);
   }
   sema_up(&file_sema);
   return result;
@@ -233,7 +230,7 @@ int write (int fd, const void *buffer, unsigned length)
   int bytesWritten = 0; 
   if(writeFile != NULL)
   {
-    bytesWritten = file_write(writeFile, buffer, length);    
+    bytesWritten = file_write(writeFile, *(char**)buffer, length);    
   }
   sema_up(&file_sema);
   return bytesWritten;
@@ -242,7 +239,7 @@ int write (int fd, const void *buffer, unsigned length)
 void seek (int fd, unsigned position)
 {
   sema_down(&file_sema);
-  struct file *f = mapFile(fd);
+  struct file* f = mapFile(fd);
   if(f != NULL)
   {
     file_seek(f, position);
@@ -252,14 +249,27 @@ void seek (int fd, unsigned position)
 
 unsigned tell (int fd)
 {
-  return 0;
+  unsigned result = 0;
+  sema_down(&file_sema);
+  struct file* f = mapFile(fd);
+  if(f != NULL)
+  {
+    result = file_tell(f);
+  }
+  sema_up(&file_sema);
+  return result;
 }
 
 void close (int fd)
 {
   sema_down(&file_sema);
   struct file* file = mapFile(fd);
-  file_close(file);
+  if(file != NULL)
+  { 
+    const char* file_name = get_file_name(fd);
+    file_close(file);
+    close_all_fd(file_name);
+  }
   sema_up(&file_sema);
 }
 
@@ -285,4 +295,40 @@ struct file* mapFile(int fd)
 
   return NULL;   
 }
+
+const char* get_file_name(int fd) {
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->file_list);
+      e != list_end (&thread_current()->file_list);
+      e = list_next (e))
+  {
+    struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
+    if(temp->fd == fd)
+    {
+      return temp->name;
+    }
+  }
+
+  return NULL;
+}
+
+void close_all_fd(const char* file_name)
+{
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->file_list);
+      e != list_end (&thread_current()->file_list);
+      e = list_next (e))
+  {
+    struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
+    if(strcmp(temp->name, file_name))
+    {
+      e = list_remove(e);
+      e = list_prev(e);
+      free(temp);
+    }
+  }
+
+} 
 

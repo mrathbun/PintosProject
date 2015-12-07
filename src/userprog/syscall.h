@@ -9,6 +9,7 @@ struct file_mapper
 {
   int fd;
   struct file* open_file;
+  const char* name;
   struct list_elem elem;
 };
 
@@ -31,5 +32,7 @@ unsigned tell (int fd);
 void close (int fd);
 
 struct file* mapFile(int fd);
+const char* get_file_name(int fd);
+void close_all_fd(const char* file_name);
 
 #endif /* userprog/syscall.h */
