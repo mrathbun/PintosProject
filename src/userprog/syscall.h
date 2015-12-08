@@ -16,6 +16,7 @@ struct file_mapper
 void syscall_init (void);
 bool check_valid_pointer (const void* esp);
 void check_valid_buffer(void* esp, int offset);
+void check_valid_args(void* esp, int numArgs);
 
 void halt (void);
 void exit (int status);

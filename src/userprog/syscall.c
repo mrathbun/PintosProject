@@ -46,10 +46,22 @@ check_valid_pointer (const void* esp)
  */
 void check_valid_buffer(void* esp, int offset)
 {
-  if(!check_valid_pointer(*(char**)(esp + offset)))
+  if(!check_valid_pointer((void*)*(char**)(esp + offset)))
   {
     exit(-1);
   }
+}
+
+void check_valid_args(void* esp, int numArgs) 
+{
+  int i;
+  for(i = 1; i <= numArgs; i++)
+  {
+    if(!check_valid_pointer(esp + 4 * i))
+    {
+      exit(-1);  
+    } 
+  } 
 }
 
 static void
@@ -68,59 +80,74 @@ syscall_handler (struct intr_frame *f)
         halt();
         break;
       case SYS_EXIT:
+        check_valid_args(esp, 1);
         exit(*(int*)(esp + 4));   
         break;
       case SYS_EXEC:
-
+        check_valid_args(esp, 1);
+        check_valid_buffer(esp, 4);
+        result = exec(*(char**)(esp + 4));  
+        f->eax = result;  
         break;
       case SYS_WAIT:
 
         break;
       case SYS_CREATE:
+        check_valid_args(esp, 2);
         check_valid_buffer(esp, 4); 
         result = create(*(char**)(esp + 4), *(int*)(esp + 8));
         f->eax = result;  
         break;
       case SYS_REMOVE:
-
+        check_valid_args(esp, 1);
+        check_valid_buffer(esp, 4);
+        result = remove(*(char**)(esp + 4));
+        f->eax = result;
         break;
       case SYS_OPEN:
+        check_valid_args(esp, 1);
         check_valid_buffer(esp, 4);
         result = open(*(char**)(esp + 4));
         f->eax = result;
         break;
       case SYS_FILESIZE:
+        check_valid_args(esp, 1);
         result = filesize(*(int*)(esp + 4));
         f->eax = result; 
         break;
       case SYS_READ:
+        check_valid_args(esp, 3);
         check_valid_buffer(esp, 8); 
         result = read(*(int*)(esp + 4), esp + 8, *(int*)(esp + 12));
         f->eax = result; 
         break;
       case SYS_WRITE:
+        check_valid_args(esp, 3);
         check_valid_buffer(esp, 8);
         result = write(*(int*)(esp + 4), esp + 8, *(int*)(esp + 12));  
         f->eax = result;
         break;
       case SYS_SEEK:
+        check_valid_args(esp, 2);
         seek(*(int*)(esp + 4), *(int*)(esp + 8));
         break;
       case SYS_TELL:
-        tell(*(int*)(esp + 4));
+        check_valid_args(esp, 1);
+        result = tell(*(int*)(esp + 4));
+        f->eax = result;
         break;
       case SYS_CLOSE:
+        check_valid_args(esp, 1);
         close(*(int*)(esp + 4));       
         break;
       default:
         printf("Unexpected syscall\n");
         break;
-       
     }
   }
   else 
   {
-    thread_exit();
+    exit(-1);
   } 
 }
 
@@ -138,7 +165,10 @@ void exit (int status)
 
 int exec (const char *file)
 {
-  return 0;
+  sema_down(&file_sema);
+  int result = process_execute(file);
+  sema_up(&file_sema);
+  return result;
 }
 
 int wait (int childProc)
@@ -156,7 +186,10 @@ bool create (const char *file, unsigned initial_size)
 
 bool remove (const char *file)
 {
-  return false;
+  sema_down(&file_sema);
+  bool result = filesys_remove(file); 
+  sema_up(&file_sema);
+  return result;
 }
 
 int open (const char *file)
@@ -322,13 +355,11 @@ void close_all_fd(const char* file_name)
       e = list_next (e))
   {
     struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
-    if(strcmp(temp->name, file_name))
+    if(strcmp(temp->name, file_name) == 0)
     {
       e = list_remove(e);
       e = list_prev(e);
       free(temp);
     }
   }
-
-} 
-
+}
