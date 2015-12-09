@@ -3,8 +3,8 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -51,9 +51,38 @@ process_execute (const char *file_name)
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
   
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy); 
+  }
+  else
+  {
+    void* tempHolder = malloc(sizeof(struct child_thread_holder)); 
+    struct child_thread_holder* hold = (struct child_thread_holder*)tempHolder;
+    hold->tid = tid;
+    list_push_back(&thread_current()->child_list, &hold->elem);
+  }
+  
   return tid;
 }
+
+struct child_thread_holder* get_child_proc(tid_t child_tid)
+{
+  struct thread *t = thread_current();
+  struct list_elem *e;
+
+  for(e = list_begin (&t->child_list); e != list_end (&t->child_list);
+      e = list_next (e))
+  {
+    struct child_thread_holder* child = list_entry(e, struct child_thread_holder, elem);
+    if(child->tid == child_tid)
+    {
+      return child;
+    } 
+  }
+  
+  return NULL;
+} 
+
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -104,11 +133,10 @@ int
 process_wait (tid_t child_tid ) 
 {
   struct thread* t = get_thread_from_tid(child_tid);
-  
+  struct child_thread_holder* ct = get_child_proc(child_tid);
   //Handle all invalid input
-  if(t == NULL)
+  if(ct == NULL)
   {
-    //printf("Reached: %d\n", child_tid);
     return -1;
   }
   else 

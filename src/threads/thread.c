@@ -633,6 +633,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&(t->waitSem), 0);
   list_init(&t->lock_list);
   list_init(&t->file_list);
+  list_init(&t->child_list);
   list_push_back (&all_list, &t->allelem);
 }
 

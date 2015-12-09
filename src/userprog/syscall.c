@@ -90,7 +90,9 @@ syscall_handler (struct intr_frame *f)
         f->eax = result;  
         break;
       case SYS_WAIT:
-
+        check_valid_args(esp, 1);
+        result = wait(*(int*)(esp + 4));
+        f->eax = result; 
         break;
       case SYS_CREATE:
         check_valid_args(esp, 2);
@@ -173,7 +175,7 @@ int exec (const char *file)
 
 int wait (int childProc)
 {
-  return 0;
+  return process_wait(childProc);
 }
 
 bool create (const char *file, unsigned initial_size)

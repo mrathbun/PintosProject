@@ -99,6 +99,7 @@ struct thread
     struct semaphore sleepSem;
     struct list lock_list;
     struct list file_list;
+    struct list child_list; 
     struct semaphore waitSem; 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -111,6 +112,13 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct child_thread_holder 
+  {
+    tid_t tid;
+    int exit_status;
+    struct list_elem elem; 
+  }; 
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
