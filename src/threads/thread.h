@@ -101,6 +101,8 @@ struct thread
     struct list file_list;
     struct list child_list; 
     struct semaphore waitSem; 
+    struct semaphore execSem;
+    int* exit_status;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -116,7 +118,6 @@ struct thread
 struct child_thread_holder 
   {
     tid_t tid;
-    int exit_status;
     struct list_elem elem; 
   }; 
 

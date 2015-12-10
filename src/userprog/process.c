@@ -29,6 +29,7 @@ static bool load (const char *cmdline, char *args, void (**eip) (void), void **e
 tid_t
 process_execute (const char *file_name) 
 {
+
   char *fn_copy, *name_copy;
   tid_t tid;
   
@@ -49,7 +50,12 @@ process_execute (const char *file_name)
   name_copy = strtok_r(name_copy, " ", &save_ptr);
 
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
-  
+//  int temp = tid;
+//  struct thread* child = get_thread_from_tid(tid);
+//  child->exit_status = &temp;
+
+//  tid = temp;   
+
   if (tid == TID_ERROR)
   {
     palloc_free_page (fn_copy); 
@@ -107,7 +113,10 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+    *thread_current()->exit_status = -1;
     thread_exit ();
+  }
 
 
   /* Start the user process by simulating a return from an
@@ -141,8 +150,11 @@ process_wait (tid_t child_tid )
   }
   else 
   {
+    int temp = 0;
+    t->exit_status = &temp; 
+    remove_child_on_wait(child_tid);
     sema_down(&(t->waitSem)); 
-    return 0;
+    return temp;
   }
 }
 
@@ -156,7 +168,9 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  
+ 
+  close_all_files(); 
+
   sema_up(&(cur->waitSem));
   if (pd != NULL) 
     {
@@ -281,7 +295,12 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
   /* Parse string file name into executable and arguments*/
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  int fd = open (file_name);
+  struct file_mapper* mapper = mapFile(fd);
+  file = mapper->open_file;
+  file_deny_write(file);
+  mapper->deny_write = true;
+  
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -359,8 +378,7 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
           break;
         }
     }
-  
-   
+ 
   /* Set up stack. */
   if (!setup_stack (esp, file_name, args))
     goto done;
@@ -372,7 +390,8 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if(!success)
+    file_close (file);
   return success;
 }
 

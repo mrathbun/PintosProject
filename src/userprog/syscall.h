@@ -5,11 +5,13 @@
 #include <list.h>
 #include "filesys/file.h"
 
+
 struct file_mapper
 {
   int fd;
   struct file* open_file;
   const char* name;
+  bool deny_write;
   struct list_elem elem;
 };
 
@@ -32,8 +34,9 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
-struct file* mapFile(int fd);
-const char* get_file_name(int fd);
+struct file_mapper* mapFile(int fd);
 void close_all_fd(const char* file_name);
+void close_all_files(void);
+void remove_child_on_wait(int tid);
 
 #endif /* userprog/syscall.h */

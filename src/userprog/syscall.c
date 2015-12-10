@@ -162,6 +162,7 @@ void exit (int status)
 {
   //Handle passing exit code to parent
   printf("%s: exit(%d)\n", thread_current()->name, status);
+  *thread_current()->exit_status = status; 
   thread_exit();
 }
 
@@ -209,6 +210,7 @@ int open (const char *file)
     mapper->name = file;
     mapper->fd = fd;
     mapper->open_file = tempFile;  
+    mapper->deny_write = false;
     list_push_back(&(cur->file_list), &(mapper->elem));
   }
   
@@ -220,7 +222,7 @@ int filesize (int fd)
 {
   int result = 0;
   sema_down(&file_sema);
-  struct file* f = mapFile(fd);
+  struct file* f = mapFile(fd)->open_file;
   if(f != NULL)
   {
     result = file_length(f);
@@ -243,7 +245,7 @@ int read (int fd, void *buffer, unsigned length)
 
   int result = -1; 
   sema_down(&file_sema);
-  struct file* f = mapFile(fd);
+  struct file* f = mapFile(fd)->open_file;
   if(f != NULL)
   {
     result = file_read(f, *(char**)buffer, length);
@@ -261,11 +263,11 @@ int write (int fd, const void *buffer, unsigned length)
   }
   
   sema_down(&file_sema);
-  struct file* writeFile = mapFile(fd);
+  struct file_mapper* writeFile = mapFile(fd);
   int bytesWritten = 0; 
-  if(writeFile != NULL)
+  if(writeFile != NULL && !(writeFile->deny_write))
   {
-    bytesWritten = file_write(writeFile, *(char**)buffer, length);    
+    bytesWritten = file_write(writeFile->open_file, *(char**)buffer, length);    
   }
   sema_up(&file_sema);
   return bytesWritten;
@@ -274,7 +276,7 @@ int write (int fd, const void *buffer, unsigned length)
 void seek (int fd, unsigned position)
 {
   sema_down(&file_sema);
-  struct file* f = mapFile(fd);
+  struct file* f = mapFile(fd)->open_file;
   if(f != NULL)
   {
     file_seek(f, position);
@@ -286,7 +288,7 @@ unsigned tell (int fd)
 {
   unsigned result = 0;
   sema_down(&file_sema);
-  struct file* f = mapFile(fd);
+  struct file* f = mapFile(fd)->open_file;
   if(f != NULL)
   {
     result = file_tell(f);
@@ -298,10 +300,10 @@ unsigned tell (int fd)
 void close (int fd)
 {
   sema_down(&file_sema);
-  struct file* file = mapFile(fd);
+  struct file* file = mapFile(fd)->open_file;
   if(file != NULL)
   { 
-    const char* file_name = get_file_name(fd);
+    const char* file_name = mapFile(fd)->name;
     file_close(file);
     close_all_fd(file_name);
   }
@@ -312,7 +314,7 @@ void close (int fd)
  * Returns the file that corresponds with the file descriptor fd,
  * or null if there isn't and open file with that descriptor. 
  */
-struct file* mapFile(int fd) 
+struct file_mapper* mapFile(int fd) 
 {
 
   struct list_elem *e;
@@ -324,28 +326,11 @@ struct file* mapFile(int fd)
     struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
     if(temp->fd == fd)
     {
-      return temp->open_file;
+      return temp;
     }  
   } 
 
   return NULL;   
-}
-
-const char* get_file_name(int fd) {
-  struct list_elem *e;
-
-  for(e = list_begin (&thread_current()->file_list);
-      e != list_end (&thread_current()->file_list);
-      e = list_next (e))
-  {
-    struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
-    if(temp->fd == fd)
-    {
-      return temp->name;
-    }
-  }
-
-  return NULL;
 }
 
 void close_all_fd(const char* file_name)
@@ -362,6 +347,41 @@ void close_all_fd(const char* file_name)
       e = list_remove(e);
       e = list_prev(e);
       free(temp);
+    }
+  }
+}
+
+void close_all_files(void)
+{
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->file_list);
+      e != list_end (&thread_current()->file_list);
+      e = list_next (e))
+  {
+    struct file_mapper *temp = list_entry (e, struct file_mapper, elem);
+    file_close(temp->open_file);  
+    e = list_remove(e);
+    e = list_prev(e);
+    free(temp);
+  }
+}
+
+
+void remove_child_on_wait(int tid)
+{
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->child_list);
+      e != list_end (&thread_current()->child_list);
+      e = list_next (e))
+  {
+    struct child_thread_holder *ct = list_entry (e, struct child_thread_holder, elem);
+    if(ct->tid == tid)
+    {
+      e = list_remove(e);
+      e = list_prev(e);
+      free(ct);
     }
   }
 }

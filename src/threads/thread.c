@@ -631,6 +631,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->remainingTicks = 0;
   sema_init(&(t->sleepSem), 0);
   sema_init(&(t->waitSem), 0);
+  sema_init(&(t->execSem), 0);
+  t->exit_status = NULL; 
   list_init(&t->lock_list);
   list_init(&t->file_list);
   list_init(&t->child_list);
