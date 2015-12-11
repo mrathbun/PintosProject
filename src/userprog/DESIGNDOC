@@ -137,6 +137,51 @@ In process:
   -Holds all of the synch elements and buffers to allow for dynamic deallocation
 of memory whenever an exception is encountered or a process must exit.
 
+CHANGED FROM INITIAL:
+
+In process:
+
+-struct list children was changed to struct child_thread_holder which is still used
+ to hold all of the child processes under a parent process.
+
+-struct list currently_waiting;
+ struct process_child
+ struct sema_share
+
+ -These 3 structs were omitted
+
+In syscall:
+
+-struct file_mapper
+ {
+    int fd;
+    struct file* open_file;
+    const char* name;
+    bool deny_write;
+    struct list_elem elem;
+ };
+
+ -the file mapper is a struct used to hold all the elements of an open file so that by
+  just knowing the file descriptor we can access more info about the open file
+
+-struct readerMutex
+ struct writeMutex
+ struct openMutex
+
+ -These 3 structs were omitted in exchange for the struct lock file_lock. This is
+  due to the fact that we realized one lock would be a simpler and suffiecient
+  implementation when compared to the reader/writer implementation which is unecessary
+  for this project.
+
+-struct lock file_lock
+  
+ -This is used to only allow one file to be accessed at a time
+
+-static int globalfd;
+ 
+ -This global fd is so a process will have access to its file descriptor for any syscall
+
+ 
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
@@ -162,6 +207,12 @@ to the file system are used. Any amount of files can be read at once, but
 we make sure that if a file is being written to, the only way that can happen 
 is if that process is the only one in the file system. Furthermore, we take the 
 precaution of synchronizing the opening of files.      
+
+CHANGED FROM INITIAL:
+
+We no longer use the reader/writer scenario implementation. We now use a single
+lock which is shared between all the file operation syscalls to allow only 
+one to be executed at a given time.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
