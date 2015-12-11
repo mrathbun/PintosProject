@@ -19,6 +19,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+static bool LOAD_STATUS;
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, char *args, void (**eip) (void), void **esp);
 
@@ -50,16 +52,21 @@ process_execute (const char *file_name)
   name_copy = strtok_r(name_copy, " ", &save_ptr);
 
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
-//  int temp = tid;
-//  struct thread* child = get_thread_from_tid(tid);
-//  child->exit_status = &temp;
 
-//  tid = temp;   
+  if(tid != TID_ERROR)
+    sema_down(&get_thread_from_tid(tid)->execSem);
 
+   
   if (tid == TID_ERROR)
   {
     palloc_free_page (fn_copy); 
   }
+
+  else if(!LOAD_STATUS)
+  {
+    tid = -1;
+  } 
+
   else
   {
     void* tempHolder = malloc(sizeof(struct child_thread_holder)); 
@@ -109,12 +116,15 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, save_ptr, &if_.eip, &if_.esp);
+
+  LOAD_STATUS = success;
  
+  sema_up(&thread_current()->execSem);
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
   {
-    *thread_current()->exit_status = -1;
     thread_exit ();
   }
 
@@ -168,8 +178,10 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
- 
+
   close_all_files(); 
+  remove_all_children(); 
+  release_file_lock();
 
   sema_up(&(cur->waitSem));
   if (pd != NULL) 
@@ -291,21 +303,26 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
   /* Parse string file name into executable and arguments*/
 
   /* Open executable file. */
   int fd = open (file_name);
   struct file_mapper* mapper = mapFile(fd);
+  if(mapper == NULL)
+  {
+    goto done;
+  }
+ 
   file = mapper->open_file;
   file_deny_write(file);
-  mapper->deny_write = true;
-  
+  mapper->deny_write = true; 
+ 
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -390,7 +407,7 @@ load (const char *file_name, char* args,  void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  if(!success)
+  if(!success && file != NULL)
     file_close (file);
   return success;
 }

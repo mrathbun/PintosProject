@@ -16,13 +16,13 @@
 
 static void syscall_handler (struct intr_frame *);
 
-static struct semaphore file_sema;
+static struct lock file_lock;
 static int globalfd;
 
 void
 syscall_init (void) 
 {
-  sema_init(&file_sema, 1);
+  lock_init(&file_lock);
   globalfd = 2;
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -72,7 +72,6 @@ syscall_handler (struct intr_frame *f)
   if(check_valid_pointer(esp))
   {
     int syscallNum = *(int*)(esp);
-    //printf("Syscall: %d\n", syscallNum);
     int result;
     //hex_dump(0, esp, 100, true);
     switch(syscallNum) {
@@ -168,9 +167,7 @@ void exit (int status)
 
 int exec (const char *file)
 {
-  sema_down(&file_sema);
   int result = process_execute(file);
-  sema_up(&file_sema);
   return result;
 }
 
@@ -181,17 +178,17 @@ int wait (int childProc)
 
 bool create (const char *file, unsigned initial_size)
 {
-  sema_down(&file_sema);
+  lock_acquire(&file_lock);
   bool success = filesys_create(file, initial_size);
-  sema_up(&file_sema); 
+  lock_release(&file_lock); 
   return success; 
 }
 
 bool remove (const char *file)
 {
-  sema_down(&file_sema);
+  lock_acquire(&file_lock);
   bool result = filesys_remove(file); 
-  sema_up(&file_sema);
+  lock_release(&file_lock);
   return result;
 }
 
@@ -199,8 +196,7 @@ int open (const char *file)
 {
   int fd = -1;
   struct thread* cur = thread_current();
-  sema_down(&file_sema);
-  
+  lock_acquire(&file_lock);
   struct file* tempFile = filesys_open(file);
   if(tempFile != NULL)
   {
@@ -214,20 +210,20 @@ int open (const char *file)
     list_push_back(&(cur->file_list), &(mapper->elem));
   }
   
-  sema_up(&file_sema);     
+  lock_release(&file_lock);
   return fd; 
 }
 
 int filesize (int fd)
 {
   int result = 0;
-  sema_down(&file_sema);
-  struct file* f = mapFile(fd)->open_file;
+  lock_acquire(&file_lock);
+  struct file_mapper* f = mapFile(fd);
   if(f != NULL)
   {
-    result = file_length(f);
+    result = file_length(f->open_file);
   }
-  sema_up(&file_sema);
+  lock_release(&file_lock);
   return result;
 }
 
@@ -244,13 +240,13 @@ int read (int fd, void *buffer, unsigned length)
   }
 
   int result = -1; 
-  sema_down(&file_sema);
-  struct file* f = mapFile(fd)->open_file;
+  lock_acquire(&file_lock);
+  struct file_mapper* f = mapFile(fd);
   if(f != NULL)
   {
-    result = file_read(f, *(char**)buffer, length);
+    result = file_read(f->open_file, *(char**)buffer, length);
   }
-  sema_up(&file_sema);
+  lock_release(&file_lock);
   return result;
 }
 
@@ -262,52 +258,54 @@ int write (int fd, const void *buffer, unsigned length)
     return length;
   }
   
-  sema_down(&file_sema);
+  lock_acquire(&file_lock);
   struct file_mapper* writeFile = mapFile(fd);
   int bytesWritten = 0; 
   if(writeFile != NULL && !(writeFile->deny_write))
   {
     bytesWritten = file_write(writeFile->open_file, *(char**)buffer, length);    
   }
-  sema_up(&file_sema);
+  lock_release(&file_lock);
   return bytesWritten;
 }
 
 void seek (int fd, unsigned position)
 {
-  sema_down(&file_sema);
-  struct file* f = mapFile(fd)->open_file;
+  lock_acquire(&file_lock);
+  struct file_mapper* f = mapFile(fd);
   if(f != NULL)
   {
-    file_seek(f, position);
+    file_seek(f->open_file, position);
   }
-  sema_up(&file_sema);  
+  lock_release(&file_lock);
 }
 
 unsigned tell (int fd)
 {
   unsigned result = 0;
-  sema_down(&file_sema);
-  struct file* f = mapFile(fd)->open_file;
+  lock_acquire(&file_lock);
+  struct file_mapper* f = mapFile(fd);
+
   if(f != NULL)
   {
-    result = file_tell(f);
+    result = file_tell(f->open_file);
   }
-  sema_up(&file_sema);
+  lock_release(&file_lock);
   return result;
 }
 
 void close (int fd)
 {
-  sema_down(&file_sema);
-  struct file* file = mapFile(fd)->open_file;
-  if(file != NULL)
+  lock_acquire(&file_lock);
+  struct file_mapper* f = mapFile(fd);
+
+  if(f != NULL)
   { 
-    const char* file_name = mapFile(fd)->name;
-    file_close(file);
+    const char* file_name = f->name;
+    file_close(f->open_file);
     close_all_fd(file_name);
   }
-  sema_up(&file_sema);
+  lock_release(&file_lock);
 }
 
 /*
@@ -367,6 +365,22 @@ void close_all_files(void)
   }
 }
 
+void remove_all_children(void)
+{
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->child_list);
+      e != list_end (&thread_current()->child_list);
+      e = list_next (e))
+  {
+    struct child_thread_holder *temp = list_entry (e, struct child_thread_holder, elem);
+    e = list_remove(e);
+    e = list_prev(e);
+    free(temp);
+  }
+
+}
+
 
 void remove_child_on_wait(int tid)
 {
@@ -385,3 +399,12 @@ void remove_child_on_wait(int tid)
     }
   }
 }
+
+void release_file_lock(void)
+{
+  if(file_lock.holder != NULL && file_lock.holder->tid == thread_current()->tid)
+  {
+    lock_release(&file_lock);
+  } 
+}
+
