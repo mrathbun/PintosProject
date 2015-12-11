@@ -27,6 +27,7 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/*Checks if a pointer is in user space and is mapped. */ 
 bool 
 check_valid_pointer (const void* esp)
 {
@@ -41,9 +42,7 @@ check_valid_pointer (const void* esp)
    
 }
 
-/*
- *Should this be more robust?
- */
+/*Checks if a buffer to be written to /read from is valid */   
 void check_valid_buffer(void* esp, int offset)
 {
   if(!check_valid_pointer((void*)*(char**)(esp + offset)))
@@ -52,6 +51,7 @@ void check_valid_buffer(void* esp, int offset)
   }
 }
 
+/*Checks if all arguments to be passed to function are valid pointers. */
 void check_valid_args(void* esp, int numArgs) 
 {
   int i;
@@ -64,16 +64,17 @@ void check_valid_args(void* esp, int numArgs)
   } 
 }
 
+
+/*Chooses which function to call depending on syscall number passed and 
+ * passes arguments. */
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  //printf ("system call!\n");
   void *esp = f->esp;
   if(check_valid_pointer(esp))
   {
     int syscallNum = *(int*)(esp);
     int result;
-    //hex_dump(0, esp, 100, true);
     switch(syscallNum) {
       case SYS_HALT:
         halt();
@@ -159,7 +160,6 @@ void halt (void)
 
 void exit (int status)
 {
-  //Handle passing exit code to parent
   printf("%s: exit(%d)\n", thread_current()->name, status);
   *thread_current()->exit_status = status; 
   thread_exit();
@@ -309,8 +309,8 @@ void close (int fd)
 }
 
 /*
- * Returns the file that corresponds with the file descriptor fd,
- * or null if there isn't and open file with that descriptor. 
+ * Returns the file representation that corresponds with the file descriptor fd,
+ * or null if there isn't an open file with that descriptor. 
  */
 struct file_mapper* mapFile(int fd) 
 {
@@ -331,6 +331,8 @@ struct file_mapper* mapFile(int fd)
   return NULL;   
 }
 
+/*When a file is closed, this invalidates all file descriptors that point
+ *to the same file. */   
 void close_all_fd(const char* file_name)
 {
   struct list_elem *e;
@@ -349,10 +351,10 @@ void close_all_fd(const char* file_name)
   }
 }
 
+/*Removes all files and cleans up memory when a process is exiting. */ 
 void close_all_files(void)
 {
   struct list_elem *e;
-
   for(e = list_begin (&thread_current()->file_list);
       e != list_end (&thread_current()->file_list);
       e = list_next (e))
@@ -365,10 +367,12 @@ void close_all_files(void)
   }
 }
 
+/*Removes all child_thread_holders from child_list and cleans up memory when
+ *a process exits. */  
 void remove_all_children(void)
 {
   struct list_elem *e;
-
+ 
   for(e = list_begin (&thread_current()->child_list);
       e != list_end (&thread_current()->child_list);
       e = list_next (e))
@@ -378,10 +382,10 @@ void remove_all_children(void)
     e = list_prev(e);
     free(temp);
   }
-
 }
 
-
+/*Removes a child_thread_holder from thread's child_list when it is waited on. 
+ * Used to prevent a file being waited on twice. */ 
 void remove_child_on_wait(int tid)
 {
   struct list_elem *e;
@@ -400,11 +404,13 @@ void remove_child_on_wait(int tid)
   }
 }
 
+/*If the exiting process holds the file_lock, then make it release it before 
+ * exiting. */  
 void release_file_lock(void)
 {
   if(file_lock.holder != NULL && file_lock.holder->tid == thread_current()->tid)
   {
     lock_release(&file_lock);
-  } 
+  }
 }
 

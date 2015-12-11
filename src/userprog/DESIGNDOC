@@ -141,8 +141,13 @@ CHANGED FROM INITIAL:
 
 In process:
 
--struct list children was changed to struct child_thread_holder which is still used
- to hold all of the child processes under a parent process.
+-struct list children was changed to struct child_thread_holder which is still
+used to hold all of the child processes under a parent process. These are added
+to the struct child_list in the thread struct.
+
+-static bool LOAD_STATUS
+
+  -This is used to reflect the success of a child process loading.
 
 -struct list currently_waiting;
  struct process_child
@@ -161,8 +166,9 @@ In syscall:
     struct list_elem elem;
  };
 
- -the file mapper is a struct used to hold all the elements of an open file so that by
-  just knowing the file descriptor we can access more info about the open file
+ -The file mapper is a struct used to hold all the elements of an open file so
+  that by just knowing the file descriptor we can access more info about the 
+  open file
 
 -struct readerMutex
  struct writeMutex
@@ -179,9 +185,39 @@ In syscall:
 
 -static int globalfd;
  
- -This global fd is so a process will have access to its file descriptor for any syscall
+ -This global fd keeps track of the next available file descriptor 
 
- 
+In thread:
+
+-struct list file_list;
+
+  -Keeps track of all the files open by the given process. Stores info on the
+   files using the struct file_mapper.
+
+-struct list child_list;
+
+  -Keeps track of all child processes spawned by the parent process. Stores
+   the child's tid using thee struct child_thread_holder.
+
+-struct semaphore waitSem;
+
+  -Used to coordinate a parent waiting on child.   
+
+-struct semaphore execSem
+  
+  -Used to coordinate a parent process waiting on a child process to load.
+
+-int* exit_status
+
+  -Used to pass the child's exit_status to its parent.
+
+-struct child_thread_holder
+  {
+    tid_t tid;
+    struct list_elem elem;
+  };
+
+  -Used so that a parent process can store its child thread tids in a list. 
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
@@ -239,6 +275,14 @@ code of the process to be waited on. Once we obtain this, we can see whether
 the child process was killed by the kernel or by calling exit(). If it is from 
 calling exit(). we return the exit code. Otherwise, we return -1.     
 
+CHANGED FROM INITIAL:
+
+We used a shared pointer and a semaphore to get wait to work completely. 
+Before the parent process waits on the child process, it copies the pointer 
+that is stored in the child process. When the child process exits, it updates 
+this pointer and calls sema_up. Then the parent process has the updated exit 
+status and returns it.  
+
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
 >> process to be terminated.  System calls are fraught with such
@@ -272,6 +316,12 @@ creating a list of all buffers and synchronization elements held by a process
 at any given time. Based on the type of element, we will generically handle 
 either releasing the synch element or freeing memory.         
 
+CHANGED FROM INITIAL:
+We didn't keep a list of all things held by the current thread. Instead, we 
+made sure to keep track of dynamically allocated memory and synchronization 
+objects, as there were only a few. Then we just cleaned this up in 
+process_exit.   
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -286,6 +336,12 @@ TID_ERROR. Thus, the parent process will just wait for this function to return,
 as the thread of control will be in process_execute any way. No synchronization
 is needed because the parent process can't advance out of exec until the 
 function call returns.        
+
+CHANGED FROM INITIAL:
+
+We use thee execSem to ensure proper synchronization here. The static
+variable LOAD_STATUS is usedd to keep track of whether or not the process 
+could actually load. 
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P

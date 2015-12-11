@@ -9,6 +9,8 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+/* Holds pointer to initial arguments so that pointers can
+ * be put on stack in correct order. */ 
 struct args_holder
 {
   char* arg_start;

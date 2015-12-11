@@ -5,7 +5,7 @@
 #include <list.h>
 #include "filesys/file.h"
 
-
+/*Holds info on files opened. Stored in a thread's file_list. */ 
 struct file_mapper
 {
   int fd;

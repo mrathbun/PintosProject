@@ -78,6 +78,9 @@ process_execute (const char *file_name)
   return tid;
 }
 
+/*Returns child_thread_holder object corresponding with 
+ *child_tid. If the current thread doesn' have a child matching child_tid then
+  it returns NULL */   
 struct child_thread_holder* get_child_proc(tid_t child_tid)
 {
   struct thread *t = thread_current();
@@ -144,10 +147,8 @@ start_process (void *file_name_)
    exception), returns -1.  If TID is invalid or if it was not a
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
-   immediately, without waiting.
-
-   This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
+   immediately, without waiting. */
+ 
 int
 process_wait (tid_t child_tid ) 
 {
@@ -179,6 +180,7 @@ process_exit (void)
      to the kernel-only page directory. */
   pd = cur->pagedir;
 
+  /* Clean up all resources allocated b syscall handling. */  
   close_all_files(); 
   remove_all_children(); 
   release_file_lock();
@@ -545,11 +547,6 @@ setup_stack (void **esp, const char* file_name, char* args)
   struct list args_list;
   list_init (&args_list);
 
- /*
- * Temporary Hack
- * 
- */
-
   struct args_holder argsHolders[30];  
   
   if(length % 4 != 0)
@@ -594,8 +591,6 @@ setup_stack (void **esp, const char* file_name, char* args)
     argc++;
   }
 
-  //printf("List size: %d\n", (int)list_size(&args_list));
-
   *esp -= 4;
   memcpy(*esp, "\0", 1);  
 
@@ -620,8 +615,6 @@ setup_stack (void **esp, const char* file_name, char* args)
   *esp -= 4;
   argc = 0;
   memcpy(*esp, (void*)&argc, 4);    
-
-  //hex_dump(0, *esp, 100, true);
 
   return success;
 }
