@@ -39,6 +39,7 @@ void close_all_fd(const char* file_name);
 void close_all_files(void);
 void remove_all_children(void);
 void remove_child_on_wait(int tid);
+int get_child_status(int tid);
 void release_file_lock(void);
 
 #endif /* userprog/syscall.h */

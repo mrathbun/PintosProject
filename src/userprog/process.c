@@ -72,6 +72,8 @@ process_execute (const char *file_name)
     void* tempHolder = malloc(sizeof(struct child_thread_holder)); 
     struct child_thread_holder* hold = (struct child_thread_holder*)tempHolder;
     hold->tid = tid;
+    hold->child_status = -1;
+    get_thread_from_tid(tid)->exit_status = &hold->child_status;
     list_push_back(&thread_current()->child_list, &hold->elem);
   }
   
@@ -161,11 +163,12 @@ process_wait (tid_t child_tid )
   }
   else 
   {
-    int temp = 0;
-    t->exit_status = &temp; 
+    if(t != NULL) {
+      sema_down(&(t->waitSem));
+    }
+    int child_status = get_child_status(child_tid);   
     remove_child_on_wait(child_tid);
-    sema_down(&(t->waitSem)); 
-    return temp;
+    return child_status;
   }
 }
 
@@ -180,7 +183,7 @@ process_exit (void)
      to the kernel-only page directory. */
   pd = cur->pagedir;
 
-  /* Clean up all resources allocated b syscall handling. */  
+  /* Clean up all resources allocated by syscall handling. */  
   close_all_files(); 
   remove_all_children(); 
   release_file_lock();

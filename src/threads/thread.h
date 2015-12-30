@@ -118,6 +118,7 @@ struct thread
 struct child_thread_holder 
   {
     tid_t tid;
+    int child_status;
     struct list_elem elem; 
   }; 
 

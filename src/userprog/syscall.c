@@ -160,8 +160,9 @@ void halt (void)
 
 void exit (int status)
 {
-  printf("%s: exit(%d)\n", thread_current()->name, status);
-  *thread_current()->exit_status = status; 
+  struct thread* cur = thread_current();
+  printf("%s: exit(%d)\n", cur->name, status);
+  *cur->exit_status = status; 
   thread_exit();
 }
 
@@ -403,6 +404,25 @@ void remove_child_on_wait(int tid)
     }
   }
 }
+
+int get_child_status(int tid)
+{
+  struct list_elem *e;
+
+  for(e = list_begin (&thread_current()->child_list);
+      e != list_end (&thread_current()->child_list);
+      e = list_next (e))
+  {
+    struct child_thread_holder *ct = list_entry (e, struct child_thread_holder, elem);
+    if(ct->tid == tid)
+    {
+      return ct->child_status;
+    }
+  }
+
+  return -1;
+}
+
 
 /*If the exiting process holds the file_lock, then make it release it before 
  * exiting. */  
