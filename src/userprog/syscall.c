@@ -162,7 +162,9 @@ void exit (int status)
 {
   struct thread* cur = thread_current();
   printf("%s: exit(%d)\n", cur->name, status);
-  *cur->exit_status = status; 
+  if(cur->exit_status != NULL) {
+    *cur->exit_status = status; 
+  }
   thread_exit();
 }
 

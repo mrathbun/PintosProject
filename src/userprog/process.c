@@ -16,6 +16,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -31,7 +32,6 @@ static bool load (const char *cmdline, char *args, void (**eip) (void), void **e
 tid_t
 process_execute (const char *file_name) 
 {
-
   char *fn_copy, *name_copy;
   tid_t tid;
   
@@ -53,10 +53,11 @@ process_execute (const char *file_name)
 
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
 
+
   if(tid != TID_ERROR)
     sema_down(&get_thread_from_tid(tid)->execSem);
 
-   
+
   if (tid == TID_ERROR)
   {
     palloc_free_page (fn_copy); 
@@ -189,6 +190,7 @@ process_exit (void)
   release_file_lock();
 
   sema_up(&(cur->waitSem));
+  sema_up(&(cur->execSem));
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
